@@ -1,4 +1,4 @@
-name: Build Voice Leading Explorer
+name: Build and Publish Voice Leading Explorer
 
 on:
   push:
@@ -7,6 +7,10 @@ on:
   pull_request:
     branches:
       - main
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build:
@@ -28,5 +32,21 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build Docker image
-        run: docker build -t voice-leading-explorer .
+        run: |
+          docker build \
+            -t ghcr.io/goober19697/voice-leading-explorer:latest \
+            .
+
+      - name: Publish Docker image
+        if: github.event_name == 'push'
+        run: |
+          docker push ghcr.io/goober19697/voice-leading-explorer:latest
