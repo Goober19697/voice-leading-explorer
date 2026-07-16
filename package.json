@@ -1,0 +1,22 @@
+{
+  "name": "voice-leading-explorer",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Piano voice-leading exploration tool: enter a voicing, see every reachable chord ranked by semitone travel, grouped by emotional feel, with real-piano playback and progression building.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "jsdom": "^29.1.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tone": "^14.8.49"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.0",
+    "vite": "^5.0.0"
+  }
+}
