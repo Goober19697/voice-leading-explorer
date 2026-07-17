@@ -1469,7 +1469,7 @@ export default function VoiceLeadingExplorer() {
                         {playingKey === r.key ? "■" : "▶"}
                       </button>
                       <button className="vl-row-apply" onClick={() => applyResult(r)}>
-                        Move here →
+                        Add →
                       </button>
                     </div>
                   ))}
