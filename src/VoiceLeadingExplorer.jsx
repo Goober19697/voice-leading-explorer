@@ -365,8 +365,8 @@ function PianoKeys({ midis }) {
 // ---------- component ----------
 
 export default function VoiceLeadingExplorer() {
-  const [rawText, setRawText] = useState("A3 E4 F4 G4 C5");
-  const [history, setHistory] = useState([{ text: "A3 E4 F4 G4 C5", label: null }]); // trail of committed voicings
+  const [rawText, setRawText] = useState("");
+  const [history, setHistory] = useState([{ text: "", label: null }]); // trail of committed voicings
   const [useFlats, setUseFlats] = useState(false); // spelling preference
   const [error, setError] = useState(null);
   const [playingKey, setPlayingKey] = useState(null);
@@ -1199,7 +1199,7 @@ export default function VoiceLeadingExplorer() {
               value={rawText}
               onChange={e => setRawText(e.target.value)}
               onKeyDown={handleInputKeyDown}
-              placeholder="A3 E4 F4 G4 C5"
+              placeholder="Enter notes here."
             />
           </div>
           <div className="vl-field">
