@@ -672,7 +672,7 @@ export default function VoiceLeadingExplorer() {
       messages.push("Duplicate note dropped — a voicing can't repeat the exact same note.");
     }
     setError(messages.length ? messages.join(" ") : null);
-    setHistory(h => [...h.slice(0, -1), { text: rawText, label: null }]); // replace current position — only "Move here" grows the trail
+    setHistory(h => [...h.slice(0, -1), { text: rawText, label: null }]); // replace current position — only "Add to" grows the trail
   }
 
   function handleInputKeyDown(e) {
@@ -1469,7 +1469,7 @@ export default function VoiceLeadingExplorer() {
                         {playingKey === r.key ? "■" : "▶"}
                       </button>
                       <button className="vl-row-apply" onClick={() => applyResult(r)}>
-                        Add →
+                        Add it →
                       </button>
                     </div>
                   ))}

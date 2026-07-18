@@ -10,7 +10,7 @@ Built with React, Vite, and Tone.js. Fully client-side — no server, no databas
 - **Distinct-note voice leading** — a backtracking assignment solver maps each of your notes to its nearest target chord tone while guaranteeing no two voices land on the same pitch. Doublings and omissions follow what a real hand would do.
 - **Deduplication** — enharmonic/synonym chords built from identical notes (e.g. C6 vs Am7) collapse into one row with aliases shown.
 - **Emotion grouping** — results are organized under four mood cards: Warm & At Rest, Melancholy & Somber, Tension & Pull, Dreamy & Floating. Each row also carries a mood annotation combining the destination quality's character with the root-motion character (chromatic slide, mediant leap, tritone shift...).
-- **Progression trail** — "Move here" commits a chord and re-analyzes from it. The breadcrumb trail supports inspecting any chord's note structure, removing individual chords, undoing the last move, rewinding, and clearing.
+- **Progression trail** — "Add it" commits a chord and re-analyzes from it. The breadcrumb trail supports inspecting any chord's note structure, removing individual chords, undoing the last move, rewinding, and clearing.
 - **Playback** — single chords, transitions (2 measures per chord), and full-trail playback at 93 BPM with a chord change every 2 measures. Five trail modes: Hold, Hit, Arp, Hold·Arp alternating, Arp·Hold alternating.
 - **Sound engine** — loads the Salamander grand piano sample set; falls back to a piano-modeled FM synth when samples are unavailable. Upload your own samples (named by pitch: `C4.wav`, `Fs3.mp3`, `A#2.wav`) to use any instrument — including notes bounced from a DAW plugin.
 
