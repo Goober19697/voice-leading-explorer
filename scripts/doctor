@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+
+set -u
+
+green='\033[32m'
+red='\033[31m'
+reset='\033[0m'
+failures=0
+
+pass() {
+  printf "${green}✓${reset} %s\n" "$1"
+}
+
+fail() {
+  printf "${red}✗${reset} %s\n" "$1"
+  failures=$((failures + 1))
+}
+
+printf 'Developer environment check\n\n'
+
+if command -v git >/dev/null 2>&1; then
+  pass "Git installed ($(git --version))"
+  git_available=true
+else
+  fail 'Git installed'
+  git_available=false
+fi
+
+if [[ "$git_available" == true ]] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  branch=$(git branch --show-current)
+  if [[ -n "$branch" ]]; then
+    pass "Current branch ($branch)"
+  else
+    fail 'Current branch (detached HEAD)'
+  fi
+
+  if [[ -z "$(git status --porcelain)" ]]; then
+    pass 'Working tree clean'
+  else
+    pass 'Working tree dirty (uncommitted changes present)'
+  fi
+
+  if [[ -n "$(git remote)" ]]; then
+    pass "Git remote configured ($(git remote | tr '\n' ' ' | sed 's/ $//'))"
+  else
+    fail 'Git remote configured'
+  fi
+else
+  fail 'Current branch (not inside a Git repository)'
+  fail 'Working tree status unavailable'
+  fail 'Git remote configured'
+fi
+
+if command -v node >/dev/null 2>&1; then
+  pass "Node version ($(node --version))"
+else
+  fail 'Node installed'
+fi
+
+if command -v npm >/dev/null 2>&1; then
+  pass "npm version ($(npm --version))"
+  npm_available=true
+else
+  fail 'npm installed'
+  npm_available=false
+fi
+
+if [[ "$npm_available" == true ]] && [[ -d node_modules ]] && npm ls --depth=0 >/dev/null 2>&1; then
+  pass 'npm dependencies installed'
+else
+  fail 'npm dependencies installed (run npm install)'
+fi
+
+if command -v docker >/dev/null 2>&1; then
+  pass "Docker installed ($(docker --version))"
+  docker_available=true
+else
+  fail 'Docker installed'
+  docker_available=false
+fi
+
+if [[ "$docker_available" == true ]] && docker info >/dev/null 2>&1; then
+  pass 'Docker daemon running'
+else
+  fail 'Docker daemon running'
+fi
+
+if [[ "$docker_available" == true ]] && docker compose version >/dev/null 2>&1; then
+  pass "Docker Compose available ($(docker compose version --short 2>/dev/null || docker compose version))"
+else
+  fail 'Docker Compose available'
+fi
+
+if [[ "$npm_available" == true ]]; then
+  if build_output=$(npm run build 2>&1); then
+    pass 'Build succeeds (npm run build)'
+  else
+    fail 'Build succeeds (npm run build)'
+    printf '%s\n' "$build_output" | sed 's/^/    /'
+  fi
+else
+  fail 'Build succeeds (npm unavailable)'
+fi
+
+if command -v ssh >/dev/null 2>&1; then
+  ssh_output=$(ssh -T -o BatchMode=yes -o ConnectTimeout=10 git@github.com 2>&1)
+  ssh_status=$?
+  if [[ $ssh_status -eq 0 || "$ssh_output" == *'successfully authenticated'* ]]; then
+    pass 'SSH connection to GitHub works'
+  else
+    fail 'SSH connection to GitHub works'
+  fi
+else
+  fail 'SSH connection to GitHub works (SSH unavailable)'
+fi
+
+printf '\n'
+if [[ $failures -gt 0 ]]; then
+  printf "${red}Doctor found %d critical issue(s).${reset}\n" "$failures"
+  exit 1
+fi
+
+printf "${green}All critical checks passed.${reset}\n"

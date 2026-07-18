@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+key_path="$HOME/Desktop/AWSGOOB.pem"
+host='ubuntu@98.88.81.139'
+
+command -v ssh >/dev/null 2>&1 || { printf 'Error: SSH is not available on PATH.\n' >&2; exit 1; }
+[[ -f "$key_path" ]] || { printf 'Error: SSH key not found at %s\n' "$key_path" >&2; exit 1; }
+
+printf 'Connecting to %s for read-only deployment status...\n\n' "$host"
+ssh -i "$key_path" "$host" '
+  set -e
+  printf "==> Docker Compose services\n"
+  docker compose ps
+  printf "\n==> Docker images\n"
+  docker image ls
+  printf "\n==> Running containers\n"
+  docker ps
+'

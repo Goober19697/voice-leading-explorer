@@ -7,7 +7,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "./scripts/deploy",
+    "deploy:status": "./scripts/deploy-status",
+    "deploy:watch": "./scripts/watch-deploy",
+    "doctor": "./scripts/doctor",
+    "logs": "./scripts/logs",
+    "update-server": "./scripts/update-server"
   },
   "dependencies": {
     "jsdom": "^29.1.1",

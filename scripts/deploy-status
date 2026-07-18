@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+fail() {
+  printf 'Error: %s\n' "$1" >&2
+  exit 1
+}
+
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+  || fail 'This command must be run inside a Git repository.'
+
+repository_root=$(git rev-parse --show-toplevel)
+cd "$repository_root"
+
+branch=$(git branch --show-current)
+if [[ -n "$branch" ]]; then
+  printf 'Current branch: %s\n' "$branch"
+else
+  printf 'Current branch: detached HEAD\n'
+fi
+
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+  printf 'Latest local commit: '
+  git log -1 --format='%h %s (%cr)'
+else
+  printf 'Latest local commit: none\n'
+fi
+
+if [[ -z "$(git status --porcelain)" ]]; then
+  printf 'Working tree: clean\n'
+else
+  printf 'Working tree: has uncommitted changes\n'
+fi
+
+if git remote -v | grep -q .; then
+  printf 'Configured Git remote(s):\n'
+  git remote -v
+else
+  printf 'Configured Git remote(s): none\n'
+fi
