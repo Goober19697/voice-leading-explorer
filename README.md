@@ -12,10 +12,7 @@
 > harmonically related destinations by minimizing total voice
 > movement.**
 
-> **📸 Replace this section with a hero screenshot or animated GIF of
-> the application.**\
-> A wide screenshot of the interface should be the first thing visitors
-> see.
+![Voice-Leading Explorer Interface](docs/hero.png)
 
 ------------------------------------------------------------------------
 
