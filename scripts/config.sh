@@ -1,0 +1,2 @@
+AWS_HOST="ubuntu@98.88.81.139"
+AWS_KEY_PATH="$HOME/Desktop/AWSGOOB.pem"

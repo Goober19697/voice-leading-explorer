@@ -1,9 +1,11 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import * as Tone from "tone";
+import { parseVoicing } from "./noteParsing.js";
+import { candidateAt, candidatesForEmotion, compareCandidates, nextCandidateIndex } from "./candidatePool.js";
+import { analyzeVoicing, QUALITIES } from "./chordPatterns.js";
 
 // ---------- music theory helpers ----------
 
-const PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const SHARP_NAMES = ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"];
 const FLAT_NAMES  = ["C","D♭","D","E♭","E","F","G♭","G","A♭","A","B♭","B"];
 
@@ -21,48 +23,6 @@ const KEYS = [
   { name: "B♭", root: 10, flats: true },
   { name: "F",  root: 5,  flats: true },
 ];
-
-// [suffix, intervals]
-const QUALITIES = [
-  ["",        [0,4,7]],
-  ["m",       [0,3,7]],
-  ["dim",     [0,3,6]],
-  ["aug",     [0,4,8]],
-  ["sus4",    [0,5,7]],
-  ["sus2",    [0,2,7]],
-  ["add9",    [0,4,7,2]],
-  ["m add9",  [0,3,7,2]],
-  ["6",       [0,4,7,9]],
-  ["m6",      [0,3,7,9]],
-  ["maj7",    [0,4,7,11]],
-  ["7",       [0,4,7,10]],
-  ["m7",      [0,3,7,10]],
-  ["m7♭5",    [0,3,6,10]],
-  ["dim7",    [0,3,6,9]],
-  ["m maj7",  [0,3,7,11]],
-  ["aug maj7",[0,4,8,11]],
-  ["6/9",     [0,4,7,9,2]],
-  ["m6/9",    [0,3,7,9,2]],
-  ["maj9",    [0,4,7,11,2]],
-  ["9",       [0,4,7,10,2]],
-  ["m9",      [0,3,7,10,2]],
-  ["7♭9",     [0,4,7,10,1]],
-  ["7♯9",     [0,4,7,10,3]],
-  ["maj7♯11", [0,4,7,11,6]],
-  ["7♯11",    [0,4,7,10,6]],
-];
-
-function noteToMidi(str) {
-  const m = str.trim().match(/^([A-Ga-g])([#♯b♭]?)(-?\d+)?$/);
-  if (!m) return null;
-  const [, letter, acc, oct] = m;
-  let pc = PC[letter.toUpperCase()];
-  if (acc === "#" || acc === "♯") pc += 1;
-  if (acc === "b" || acc === "♭") pc -= 1;
-  pc = ((pc % 12) + 12) % 12;
-  const octave = oct !== undefined ? parseInt(oct, 10) : 4;
-  return (octave + 1) * 12 + pc;
-}
 
 function toneName(midi) {
   const names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
@@ -139,66 +99,10 @@ function bestAssignment(notes, pcs) {
   return bestAssigned;
 }
 
-function parseVoicing(text) {
-  const tokens = text.split(/[\s,]+/).filter(Boolean);
-  const midis = [];
-  const seen = new Set();
-  const invalidTokens = [];
-  let hadDuplicates = false;
-  for (const t of tokens) {
-    const m = noteToMidi(t);
-    if (m === null) { invalidTokens.push(t); continue; }
-    if (seen.has(m)) { hadDuplicates = true; continue; }
-    seen.add(m);
-    midis.push(m);
-  }
-  midis.sort((a, b) => a - b);
-  return { midis, hadDuplicates, invalidTokens };
-}
-
 function movementColor(dist) {
   if (dist === 0) return "var(--sage)";
   if (dist <= 2) return "var(--brass)";
   return "var(--rust)";
-}
-
-// Core chord analyzer. Finds the best-fitting chord name for a set of notes:
-// - exact matches first
-// - tolerates an omitted 5th (shell voicings) and/or omitted root (rootless jazz voicings)
-// - prefers interpretations whose root is the bass note (A C E G → Am7, not C6)
-function analyzeVoicing(midis) {
-  if (!midis || midis.length < 2) return null;
-  const pcs = new Set(midis.map(m => ((m % 12) + 12) % 12));
-  const bassPc = ((midis[0] % 12) + 12) % 12; // midis arrive sorted ascending
-  let best = null;
-  for (let root = 0; root < 12; root++) {
-    const fifthPc = (root + 7) % 12;
-    for (const [suffix, intervals] of QUALITIES) {
-      const chordSet = new Set(intervals.map(iv => (root + iv) % 12));
-      // every played pitch class must belong to the chord
-      let subset = true;
-      for (const p of pcs) if (!chordSet.has(p)) { subset = false; break; }
-      if (!subset) continue;
-      // whatever the chord has that we didn't play may only be the 5th and/or root
-      const missing = [...chordSet].filter(p => !pcs.has(p));
-      if (missing.some(p => p !== root && p !== fifthPc)) continue;
-      const missingRoot = missing.includes(root);
-      const missingFifth = missing.includes(fifthPc);
-      // rank: exact < no-5th < rootless < rootless-no-5th; then bass-as-root; then simpler chords
-      const tier = missing.length === 0 ? 0 : missingRoot ? (missingFifth ? 3 : 2) : 1;
-      const bassPenalty = !missingRoot && bassPc === root ? 0 : 1;
-      const score = [tier, bassPenalty, intervals.length];
-      if (
-        !best ||
-        score[0] < best.score[0] ||
-        (score[0] === best.score[0] && (score[1] < best.score[1] ||
-          (score[1] === best.score[1] && score[2] < best.score[2])))
-      ) {
-        best = { rootPc: root, suffix, rootless: missingRoot, score };
-      }
-    }
-  }
-  return best;
 }
 
 function labelForNotes(midis, flats) {
@@ -236,18 +140,25 @@ const SUFFIX_CATEGORY = {
   "m6/9":     "sad",
   "7":        "tense",
   "9":        "tense",
-  "7♭9":      "tense",
-  "7♯9":      "tense",
+  "7b5":      "tense",
+  "7#5":      "tense",
+  "7b9":      "tense",
+  "7#9":      "tense",
+  "7b5b9":    "tense",
+  "7b5#9":    "tense",
+  "7#5b9":    "tense",
+  "7#5#9":    "tense",
   "dim":      "tense",
   "dim7":     "tense",
-  "m7♭5":     "tense",
+  "m7b5":     "tense",
   "sus2":     "dreamy",
   "sus4":     "dreamy",
   "aug":      "dreamy",
   "aug maj7": "dreamy",
   "maj7♯11":  "dreamy",
   "7♯11":     "dreamy",
-  "m maj7":   "dreamy",
+  "m(maj7)":  "dreamy",
+  "m(maj7)b5":"dreamy",
 };
 
 // emotional character of each chord quality
@@ -265,17 +176,24 @@ const QUALITY_MOOD = {
   "maj7":     "warm, at rest",
   "7":        "restless, pulling to resolve",
   "m7":       "mellow, conversational",
-  "m7♭5":     "anxious, searching",
+  "m7b5":     "anxious, searching",
   "dim7":     "coiled tension",
-  "m maj7":   "uneasy beauty, noir",
+  "m(maj7)":  "uneasy beauty, noir",
+  "m(maj7)b5":"uneasy beauty, noir",
   "aug maj7": "surreal shimmer",
   "6/9":      "plush, contented",
   "m6/9":     "smoky, after-hours",
   "maj9":     "lush, expansive",
   "9":        "confident swagger",
   "m9":       "melancholy velvet",
-  "7♭9":      "dark urgency",
-  "7♯9":      "gritty, defiant",
+  "7b5":      "lean, unsettled pull",
+  "7#5":      "restless, augmented pull",
+  "7b9":      "dark urgency",
+  "7#9":      "gritty, defiant",
+  "7b5b9":    "dark urgency",
+  "7b5#9":    "gritty, unstable pull",
+  "7#5b9":    "dark, augmented urgency",
+  "7#5#9":    "gritty, defiant",
   "maj7♯11":  "bright wonder, lifted",
   "7♯11":     "sly, iridescent",
 };
@@ -311,8 +229,8 @@ function PianoKeys({ midis }) {
   if (!midis || midis.length === 0) return null;
   const pressed = new Set(midis);
   // range: full octaves spanning the voicing, minimum two octaves for looks
-  let startC = Math.floor(midis[0] / 12) * 12;
-  let endB = Math.floor(midis[midis.length - 1] / 12) * 12 + 11;
+  let startC = Math.floor(Math.min(...midis) / 12) * 12;
+  let endB = Math.floor(Math.max(...midis) / 12) * 12 + 11;
   while (endB - startC < 23) { endB += 12; }
 
   const WK_W = 24, WK_H = 92, BK_W = 14, BK_H = 58;
@@ -575,7 +493,7 @@ export default function VoiceLeadingExplorer() {
 
   const parsed = useMemo(() => parseVoicing(committedText), [committedText]);
   const currentNotes = parsed && parsed.midis.length ? parsed.midis : null;
-  const key = { flats: useFlats };
+  const key = useMemo(() => ({ flats: useFlats }), [useFlats]);
 
   // --- progression (trail) playback ---
   const [trailPlayingIdx, setTrailPlayingIdx] = useState(null); // which chip is sounding
@@ -660,16 +578,17 @@ export default function VoiceLeadingExplorer() {
 
   function handleSubmit() {
     const result = parseVoicing(rawText);
+    if (result.mixedOctaves) {
+      setError("Please choose one input mode:\n\n• Exact Voicing\n  Example: A3 C4 E4\n\n• Default Middle Voicing\n  Example: A C E\n\nUse one mode consistently for all notes.");
+      return;
+    }
     if (result.midis.length === 0) {
-      setError("No valid notes found — try letters A–G, optional # or b, e.g. \"A3 F#4 Bb\" (octave is optional, defaults to 4).");
+      setError("No valid notes found — try letters A–G, optional # or b, e.g. \"A E F# Bb\" or \"A3 E4 F#4 Bb4\".");
       return;
     }
     const messages = [];
     if (result.invalidTokens.length) {
       messages.push("Skipped " + result.invalidTokens.map(t => `"${t}"`).join(", ") + " — not a note I recognize.");
-    }
-    if (result.hadDuplicates) {
-      messages.push("Duplicate note dropped — a voicing can't repeat the exact same note.");
     }
     setError(messages.length ? messages.join(" ") : null);
     setHistory(h => [...h.slice(0, -1), { text: rawText, label: null }]); // replace current position — only "Add to" grows the trail
@@ -750,7 +669,7 @@ export default function VoiceLeadingExplorer() {
       }
     }
     const out = [...byNoteSet.values()];
-    out.sort((a, b) => a.totalCost - b.totalCost || b.commonCount - a.commonCount);
+    out.sort(compareCandidates);
     return out;
   }, [currentNotes, key]);
 
@@ -763,6 +682,25 @@ export default function VoiceLeadingExplorer() {
 
   const [selectedMood, setSelectedMood] = useState("warm");
   const activeGroup = grouped.find(g => g.id === selectedMood) || grouped[0];
+  const candidates = useMemo(
+    () => candidatesForEmotion(results, selectedMood),
+    [results, selectedMood]
+  );
+  const [selectedCandidateIndex, setSelectedCandidateIndex] = useState(0);
+  const selectedCandidate = candidateAt(candidates, selectedCandidateIndex);
+
+  useEffect(() => {
+    setSelectedCandidateIndex(0);
+  }, [committedText, selectedMood, useFlats]);
+
+  function selectMood(mood) {
+    setSelectedMood(mood);
+    setSelectedCandidateIndex(0);
+  }
+
+  function rescramble() {
+    setSelectedCandidateIndex(index => nextCandidateIndex(index, candidates.length));
+  }
 
   function applyResult(r) {
     const names = r.targets.map(t => midiToName(t.to, key.flats));
@@ -846,6 +784,12 @@ export default function VoiceLeadingExplorer() {
         }
         .vl-input { flex: 1; min-width: 220px; }
         .vl-input:focus, .vl-select:focus { border-color: var(--brass); }
+        .vl-input-help {
+          color: var(--ink-dim);
+          font-size: 11.5px;
+          line-height: 1.5;
+          margin-top: 1px;
+        }
         .vl-btn {
           background: var(--brass);
           color: #1B1D2A;
@@ -870,6 +814,7 @@ export default function VoiceLeadingExplorer() {
           border-radius: 6px;
           padding: 8px 10px;
           line-height: 1.4;
+          white-space: pre-line;
         }
         .vl-current-row {
           display: flex; align-items: baseline; justify-content: space-between;
@@ -945,12 +890,6 @@ export default function VoiceLeadingExplorer() {
           border-radius: 2px;
           background: rgba(237,230,214,0.15);
         }
-        .vl-count {
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 11px;
-          color: var(--ink-dim);
-          margin-bottom: 8px;
-        }
         .vl-list {
           display: flex; flex-direction: column; gap: 8px;
         }
@@ -990,13 +929,6 @@ export default function VoiceLeadingExplorer() {
           color: var(--ink-dim);
           line-height: 1.4;
         }
-        .vl-mood-btn-count {
-          position: absolute;
-          top: 10px; right: 12px;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 10px;
-          color: var(--ink-dim);
-        }
         .vl-row {
           background: var(--panel);
           border: 1px solid var(--hair);
@@ -1025,27 +957,14 @@ export default function VoiceLeadingExplorer() {
           line-height: 1.35;
           opacity: 0.85;
         }
-        .vl-row-tag {
-          font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim);
-          margin-top: 2px;
-        }
         .vl-lanes { flex: 1; display: flex; flex-direction: column; gap: 3px; }
         .vl-lane { display: flex; align-items: center; gap: 8px; }
         .vl-lane-note {
           font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-dim);
           width: 34px; text-align: right;
         }
-        .vl-lane-track {
-          flex: 1; height: 6px; background: rgba(237,230,214,0.06); border-radius: 3px;
-          position: relative; overflow: hidden;
-        }
-        .vl-lane-fill { height: 100%; border-radius: 3px; }
         .vl-lane-to {
           font-family: 'JetBrains Mono', monospace; font-size: 11px; width: 34px;
-        }
-        .vl-row-cost {
-          font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--brass);
-          width: 46px; text-align: right; flex-shrink: 0;
         }
         .vl-row-apply {
           flex-shrink: 0; background: transparent; border: 1px solid var(--hair);
@@ -1053,6 +972,7 @@ export default function VoiceLeadingExplorer() {
           padding: 7px 10px; border-radius: 6px; cursor: pointer;
         }
         .vl-row-apply:hover { border-color: var(--brass); color: var(--ink); }
+        .vl-row-apply:disabled { opacity: 0.4; cursor: not-allowed; border-color: var(--hair); color: var(--ink-dim); }
         .vl-play-btn {
           flex-shrink: 0;
           width: 30px; height: 30px;
@@ -1200,7 +1120,13 @@ export default function VoiceLeadingExplorer() {
               onChange={e => setRawText(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder="Enter notes here."
+              aria-describedby="notes-help"
             />
+            <div className="vl-input-help" id="notes-help">
+              <div>Examples:</div>
+              <div>• Exact Voicing: A3 C4 E4</div>
+              <div>• Default Middle Voicing: A C E</div>
+            </div>
           </div>
           <div className="vl-field">
             <label className="vl-label" htmlFor="spelling">Spelling</label>
@@ -1331,8 +1257,8 @@ export default function VoiceLeadingExplorer() {
                 <span className="vl-inspect-pos">chord {inspectedIdx + 1} of {history.length}</span>
               </div>
               <div className="vl-inspect-notes">
-                {notes.map(m => (
-                  <span className="vl-inspect-note" key={m}>{midiToName(m, key.flats)}</span>
+                {notes.map((m, index) => (
+                  <span className="vl-inspect-note" key={`${m}-${index}`}>{midiToName(m, key.flats)}</span>
                 ))}
               </div>
               <div className="vl-piano-wrap">
@@ -1410,22 +1336,19 @@ export default function VoiceLeadingExplorer() {
                   key={g.id}
                   type="button"
                   className={"vl-mood-btn" + (activeGroup && g.id === activeGroup.id ? " active" : "")}
-                  onClick={() => setSelectedMood(g.id)}
+                  onClick={() => selectMood(g.id)}
                 >
                   <span className="vl-mood-btn-label">{g.label}</span>
                   <span className="vl-mood-btn-blurb">{g.blurb}</span>
-                  <span className="vl-mood-btn-count">{g.items.length}</span>
                 </button>
               ))}
             </div>
 
-            {activeGroup && (
-              <>
-                <div className="vl-count">
-                  {activeGroup.items.length} voicings · closest moves first
-                </div>
+            {selectedCandidate && (() => {
+              const r = selectedCandidate;
+              const selectedNotes = r.targets.map(t => t.to);
+              return (
                 <div className="vl-list">
-                  {activeGroup.items.map(r => (
                     <div className="vl-row" key={r.key}>
                       <div className="vl-row-name">
                         <div className="vl-row-chord">
@@ -1434,59 +1357,50 @@ export default function VoiceLeadingExplorer() {
                             <span className="vl-row-alias"> / {r.aliases.join(" / ")}</span>
                           )}
                         </div>
-                        <div className="vl-row-tag">
-                          {r.commonCount} common tone{r.commonCount === 1 ? "" : "s"}
-                        </div>
                         {r.mood && <div className="vl-row-mood">{r.mood}</div>}
                       </div>
                       <div className="vl-lanes">
                         {r.targets.map((t, i) => {
-                          const pct = Math.min(t.dist / 7, 1) * 100;
                           const color = movementColor(t.dist);
                           return (
                             <div className="vl-lane" key={i}>
                               <span className="vl-lane-note">{midiToName(t.from, key.flats)}</span>
-                              <div className="vl-lane-track">
-                                <div
-                                  className="vl-lane-fill"
-                                  style={{ width: pct + "%", background: color }}
-                                />
-                              </div>
+                              <span aria-hidden="true" style={{ color }}>→</span>
                               <span className="vl-lane-to" style={{ color }}>
-                                {t.dist === 0 ? "—" : midiToName(t.to, key.flats)}
+                                {midiToName(t.to, key.flats)}
                               </span>
                             </div>
                           );
                         })}
                       </div>
-                      <div className="vl-row-cost">{r.totalCost}st</div>
                       <button
                         className="vl-play-btn"
-                        onClick={() => playTransition(currentNotes, r.targets.map(t => t.to), r.key)}
+                        onClick={() => playTransition(currentNotes, selectedNotes, r.key)}
                         aria-label={"Play move to " + r.name}
                         type="button"
                       >
                         {playingKey === r.key ? "■" : "▶"}
                       </button>
+                      <button
+                        className="vl-row-apply"
+                        type="button"
+                        onClick={rescramble}
+                        disabled={candidates.length < 2}
+                        aria-label="Try another nearby voicing with the same emotional character"
+                        title="Try another nearby voicing with the same emotional character"
+                      >
+                        Rescramble
+                      </button>
                       <button className="vl-row-apply" onClick={() => applyResult(r)}>
                         Add it →
                       </button>
                     </div>
-                  ))}
-                  {activeGroup.items.length === 0 && (
-                    <div className="vl-row" style={{ color: "var(--ink-dim)" }}>
-                      No voicings in this mood from here.
+                    <div className="vl-piano-wrap">
+                      <PianoKeys midis={selectedNotes} />
                     </div>
-                  )}
                 </div>
-              </>
-            )}
-
-            <div className="vl-legend">
-              <span><span className="vl-dot" style={{ background: "var(--sage)" }} />held (0 st)</span>
-              <span><span className="vl-dot" style={{ background: "var(--brass)" }} />step (1–2 st)</span>
-              <span><span className="vl-dot" style={{ background: "var(--rust)" }} />leap (3+ st)</span>
-            </div>
+              );
+            })()}
           </>
         )}
       </div>

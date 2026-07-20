@@ -5,6 +5,7 @@
   "description": "Piano voice-leading exploration tool: enter a voicing, see every reachable chord ranked by semitone travel, grouped by emotional feel, with real-piano playback and progression building.",
   "type": "module",
   "scripts": {
+    "test": "node --test",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

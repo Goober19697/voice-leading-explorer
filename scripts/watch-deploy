@@ -7,13 +7,18 @@ fail() {
   exit 1
 }
 
-key_path="$HOME/Desktop/AWSGOOB.pem"
-host='ubuntu@98.88.81.139'
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+config_file="$script_dir/config.sh"
+
+[[ -f "$config_file" ]] || fail "AWS configuration file not found at $config_file"
+# shellcheck source=config.sh
+source "$config_file"
+[[ -n "${AWS_HOST:-}" ]] || fail 'AWS_HOST is empty in scripts/config.sh'
 
 command -v ssh >/dev/null 2>&1 || fail 'SSH is not installed or is not available on PATH.'
-[[ -f "$key_path" ]] || fail "SSH key not found at $key_path"
+[[ -f "$AWS_KEY_PATH" ]] || fail "SSH key not found at $AWS_KEY_PATH"
 
-printf 'Connecting to %s and following Watchtower logs.\n' "$host"
+printf 'Connecting to %s and following Watchtower logs.\n' "$AWS_HOST"
 printf 'Press Control + C to exit log watching.\n\n'
 
-exec ssh -i "$key_path" "$host" 'docker logs -f watchtower'
+exec ssh -i "$AWS_KEY_PATH" "$AWS_HOST" 'docker logs -f watchtower'

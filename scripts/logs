@@ -2,14 +2,24 @@
 
 set -euo pipefail
 
-key_path="$HOME/Desktop/AWSGOOB.pem"
-host='ubuntu@98.88.81.139'
+fail() {
+  printf 'Error: %s\n' "$1" >&2
+  exit 1
+}
 
-command -v ssh >/dev/null 2>&1 || { printf 'Error: SSH is not available on PATH.\n' >&2; exit 1; }
-[[ -f "$key_path" ]] || { printf 'Error: SSH key not found at %s\n' "$key_path" >&2; exit 1; }
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+config_file="$script_dir/config.sh"
 
-printf 'Connecting to %s for container status and recent Watchtower logs...\n\n' "$host"
-ssh -i "$key_path" "$host" '
+[[ -f "$config_file" ]] || fail "AWS configuration file not found at $config_file"
+# shellcheck source=config.sh
+source "$config_file"
+[[ -n "${AWS_HOST:-}" ]] || fail 'AWS_HOST is empty in scripts/config.sh'
+
+command -v ssh >/dev/null 2>&1 || fail 'SSH is not available on PATH.'
+[[ -f "$AWS_KEY_PATH" ]] || fail "SSH key not found at $AWS_KEY_PATH"
+
+printf 'Connecting to %s for container status and recent Watchtower logs...\n\n' "$AWS_HOST"
+ssh -i "$AWS_KEY_PATH" "$AWS_HOST" '
   set -e
   printf "==> Running containers\n"
   docker ps

@@ -21,8 +21,13 @@ them from the repository root directly or through their npm aliases.
 - Docker with the Compose plugin
 - AWS access through `~/Desktop/AWSGOOB.pem`
 
-The AWS status commands connect to `ubuntu@98.88.81.139`. They only read logs
-and container state. They do not change services, images, or containers.
+AWS connection settings are centralized in `scripts/config.sh`. The EC2 public
+IP changes after stopping and starting the instance. After restarting EC2,
+update `AWS_HOST` in `scripts/config.sh`; all AWS-related commands will then use
+the new address.
+
+The AWS status commands only read logs and container state. They do not change
+services, images, or containers.
 
 `doctor` exits with a non-zero status when a critical environment check fails.
 A dirty working tree is reported for awareness but is not itself a failure.

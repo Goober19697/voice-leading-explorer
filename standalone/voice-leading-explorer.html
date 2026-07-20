@@ -67,16 +67,17 @@ const QUALITIES = [
   ["7♯11",    [0,4,7,10,6]],
 ];
 
-function noteToMidi(str) {
-  const m = str.trim().match(/^([A-Ga-g])([#♯b♭]?)(-?\d+)?$/);
-  if (!m) return null;
-  const [, letter, acc, oct] = m;
-  let pc = PC[letter.toUpperCase()];
-  if (acc === "#" || acc === "♯") pc += 1;
-  if (acc === "b" || acc === "♭") pc -= 1;
-  pc = ((pc % 12) + 12) % 12;
-  const octave = oct !== undefined ? parseInt(oct, 10) : 4;
-  return (octave + 1) * 12 + pc;
+function parseNoteToken(str) {
+  const match = str.trim().match(/^([A-Ga-g])([#♯b♭]?)(-?\d+)?$/);
+  if (!match) return null;
+  const [, letter, accidental, octaveText] = match;
+  let pitchClass = PC[letter.toUpperCase()];
+  if (accidental === "#" || accidental === "♯") pitchClass += 1;
+  if (accidental === "b" || accidental === "♭") pitchClass -= 1;
+  return {
+    pitchClass: ((pitchClass % 12) + 12) % 12,
+    octave: octaveText === undefined ? null : parseInt(octaveText, 10),
+  };
 }
 
 function toneName(midi) {
@@ -156,19 +157,22 @@ function bestAssignment(notes, pcs) {
 
 function parseVoicing(text) {
   const tokens = text.split(/[\s,]+/).filter(Boolean);
-  const midis = [];
-  const seen = new Set();
+  const notes = [];
   const invalidTokens = [];
-  let hadDuplicates = false;
-  for (const t of tokens) {
-    const m = noteToMidi(t);
-    if (m === null) { invalidTokens.push(t); continue; }
-    if (seen.has(m)) { hadDuplicates = true; continue; }
-    seen.add(m);
-    midis.push(m);
+  for (const token of tokens) {
+    const note = parseNoteToken(token);
+    if (!note) invalidTokens.push(token);
+    else notes.push(note);
   }
-  midis.sort((a, b) => a - b);
-  return { midis, hadDuplicates, invalidTokens };
+  const hasOctaves = notes.some(note => note.octave !== null);
+  const hasMissingOctaves = notes.some(note => note.octave === null);
+  const mixedOctaves = hasOctaves && hasMissingOctaves;
+  if (mixedOctaves) return { midis: [], invalidTokens, mixedOctaves: true };
+  const midis = notes.map((note, index) => {
+    const octave = note.octave === null ? (index === 0 ? 3 : 4) : note.octave;
+    return (octave + 1) * 12 + note.pitchClass;
+  });
+  return { midis, invalidTokens, mixedOctaves: false };
 }
 
 function movementColor(dist) {
@@ -184,7 +188,7 @@ function movementColor(dist) {
 function analyzeVoicing(midis) {
   if (!midis || midis.length < 2) return null;
   const pcs = new Set(midis.map(m => ((m % 12) + 12) % 12));
-  const bassPc = ((midis[0] % 12) + 12) % 12; // midis arrive sorted ascending
+  const bassPc = ((midis[0] % 12) + 12) % 12; // parser preserves the entered bass reference
   let best = null;
   for (let root = 0; root < 12; root++) {
     const fifthPc = (root + 7) % 12;
@@ -326,8 +330,8 @@ function PianoKeys({ midis }) {
   if (!midis || midis.length === 0) return null;
   const pressed = new Set(midis);
   // range: full octaves spanning the voicing, minimum two octaves for looks
-  let startC = Math.floor(midis[0] / 12) * 12;
-  let endB = Math.floor(midis[midis.length - 1] / 12) * 12 + 11;
+  let startC = Math.floor(Math.min(...midis) / 12) * 12;
+  let endB = Math.floor(Math.max(...midis) / 12) * 12 + 11;
   while (endB - startC < 23) { endB += 12; }
 
   const WK_W = 24, WK_H = 92, BK_W = 14, BK_H = 58;
@@ -675,16 +679,17 @@ function VoiceLeadingExplorer() {
 
   function handleSubmit() {
     const result = parseVoicing(rawText);
+    if (result.mixedOctaves) {
+      setError("Please choose one input mode:\n\n• Exact Voicing\n  Example: A3 C4 E4\n\n• Default Middle Voicing\n  Example: A C E\n\nUse one mode consistently for all notes.");
+      return;
+    }
     if (result.midis.length === 0) {
-      setError("No valid notes found — try letters A–G, optional # or b, e.g. \"A3 F#4 Bb\" (octave is optional, defaults to 4).");
+      setError("No valid notes found — try letters A–G, optional # or b, e.g. \"A E F# Bb\" or \"A3 E4 F#4 Bb4\".");
       return;
     }
     const messages = [];
     if (result.invalidTokens.length) {
       messages.push("Skipped " + result.invalidTokens.map(t => `"${t}"`).join(", ") + " — not a note I recognize.");
-    }
-    if (result.hadDuplicates) {
-      messages.push("Duplicate note dropped — a voicing can't repeat the exact same note.");
     }
     setError(messages.length ? messages.join(" ") : null);
     setHistory(h => [...h.slice(0, -1), { text: rawText, label: null }]); // replace current position — only "Move here" grows the trail
@@ -861,6 +866,12 @@ function VoiceLeadingExplorer() {
         }
         .vl-input { flex: 1; min-width: 220px; }
         .vl-input:focus, .vl-select:focus { border-color: var(--brass); }
+        .vl-input-help {
+          color: var(--ink-dim);
+          font-size: 11.5px;
+          line-height: 1.5;
+          margin-top: 1px;
+        }
         .vl-btn {
           background: var(--brass);
           color: #1B1D2A;
@@ -885,6 +896,7 @@ function VoiceLeadingExplorer() {
           border-radius: 6px;
           padding: 8px 10px;
           line-height: 1.4;
+          white-space: pre-line;
         }
         .vl-current-row {
           display: flex; align-items: baseline; justify-content: space-between;
@@ -1215,7 +1227,13 @@ function VoiceLeadingExplorer() {
               onChange={e => setRawText(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder="Enter notes here."
+              aria-describedby="notes-help"
             />
+            <div className="vl-input-help" id="notes-help">
+              <div>Examples:</div>
+              <div>• Exact Voicing: A3 C4 E4</div>
+              <div>• Default Middle Voicing: A C E</div>
+            </div>
           </div>
           <div className="vl-field">
             <label className="vl-label" htmlFor="spelling">Spelling</label>
@@ -1346,8 +1364,8 @@ function VoiceLeadingExplorer() {
                 <span className="vl-inspect-pos">chord {inspectedIdx + 1} of {history.length}</span>
               </div>
               <div className="vl-inspect-notes">
-                {notes.map(m => (
-                  <span className="vl-inspect-note" key={m}>{midiToName(m, key.flats)}</span>
+                {notes.map((m, index) => (
+                  <span className="vl-inspect-note" key={`${m}-${index}`}>{midiToName(m, key.flats)}</span>
                 ))}
               </div>
               <div className="vl-piano-wrap">
