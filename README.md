@@ -12,6 +12,10 @@
 > harmonically related destinations by minimizing total voice
 > movement.**
 
+## Live Demo
+
+[Open Voice-Leading Explorer](http://3.93.162.237)
+
 ![Voice-Leading Explorer Interface](docs/hero1.png)
 
 ------------------------------------------------------------------------
