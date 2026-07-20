@@ -298,76 +298,6 @@ export default function VoiceLeadingExplorer() {
     return -40 + (pct / 100) * 40; // -40dB (quiet) .. 0dB (full)
   }
 
-  const [engineName, setEngineName] = useState(null); // which sound engine is active
-  const fileInputRef = useRef(null);
-
-  // parse a pitch out of a filename like "C4.wav", "Ds3.mp3", "A#2 piano.wav", "Bb3.aiff"
-  function noteFromFilename(filename) {
-    const base = filename.replace(/\.[^.]+$/, "");
-    const m = base.match(/([A-Ga-g])([#♯sb♭]?)(-?\d)/);
-    if (!m) return null;
-    const letter = m[1].toUpperCase();
-    let acc = "";
-    if (m[2] === "#" || m[2] === "♯" || m[2] === "s") acc = "#";
-    if (m[2] === "b" || m[2] === "♭") acc = "b";
-    return letter + acc + m[3];
-  }
-
-  async function handleSampleUpload(e) {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    try {
-      const urls = {};
-      const unrecognized = [];
-      for (const f of files) {
-        const note = noteFromFilename(f.name);
-        if (note) {
-          urls[note] = URL.createObjectURL(f);
-        } else {
-          unrecognized.push(f);
-        }
-      }
-      // single file with no pitch in the name: assume middle C
-      if (Object.keys(urls).length === 0 && unrecognized.length === 1) {
-        urls["C4"] = URL.createObjectURL(unrecognized[0]);
-        unrecognized.length = 0;
-      }
-      if (Object.keys(urls).length === 0) {
-        setAudioError("Couldn't read a pitch from the filenames. Name files by note, e.g. C4.wav, Fs3.mp3, A#2.wav — or upload one file and I'll treat it as C4.");
-        return;
-      }
-      await unlockAudio();
-      const sampler = await new Promise((resolve, reject) => {
-        // scale timeout with library size: big uploads (dozens of files) need longer to decode
-        const timeoutMs = 10000 + Object.keys(urls).length * 1500;
-        const timeout = setTimeout(() => reject(new Error("sample decode timeout")), timeoutMs);
-        const s = new Tone.Sampler({
-          urls,
-          release: 1.2,
-          onload: () => { clearTimeout(timeout); resolve(s); },
-          onerror: (err) => { clearTimeout(timeout); reject(err); },
-        }).toDestination();
-      });
-      if (synthRef.current) {
-        try { synthRef.current.releaseAll(); synthRef.current.dispose(); } catch {}
-      }
-      synthRef.current = sampler;
-      synthRef.current.volume.value = volumeToDb(volume);
-      const n = Object.keys(urls).length;
-      setEngineName(`Your samples (${n} note${n === 1 ? "" : "s"})`);
-      setAudioError(
-        unrecognized.length
-          ? `Loaded ${n}, skipped ${unrecognized.map(f => `"${f.name}"`).join(", ")} — no pitch in the filename.`
-          : null
-      );
-    } catch (err) {
-      console.error(err);
-      setAudioError("Couldn't load that audio file — try WAV or MP3.");
-    } finally {
-      e.target.value = ""; // allow re-selecting the same file
-    }
-  }
-
   function makeFallbackSynth() {
     // Piano-modeled synth: percussive strike, exponential decay, no organ-like
     // sustain. FM with harmonicity 1 and a fast-decaying bright modulator
@@ -407,11 +337,8 @@ export default function VoiceLeadingExplorer() {
           onerror: (e) => { clearTimeout(timeout); reject(e); },
         }).toDestination();
       });
-      if (synthRef.current) { sampler.dispose(); return synthRef.current; } // custom samples won the race
       synthRef.current = sampler;
-      setEngineName("Grand piano samples");
     } catch (e) {
-      if (synthRef.current) return synthRef.current; // custom samples already active
       console.warn("Piano samples unavailable, using fallback synth", e);
       try {
         synthRef.current = makeFallbackSynth();
@@ -423,7 +350,6 @@ export default function VoiceLeadingExplorer() {
           volume: { value: 0 },
         };
       }
-      setEngineName("Synth piano (samples blocked)");
     }
     synthRef.current.volume.value = volumeToDb(volume);
     return synthRef.current;
@@ -986,6 +912,20 @@ export default function VoiceLeadingExplorer() {
           padding: 0;
         }
         .vl-play-btn:hover { border-color: var(--brass); background: rgba(201,138,58,0.12); }
+        .vl-play-group {
+          flex-shrink: 0;
+          display: inline-flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 2px;
+        }
+        .vl-play-label {
+          color: var(--ink-dim);
+          font-family: 'Inter', sans-serif;
+          font-size: 9px;
+          line-height: 1;
+        }
         .vl-trail {
           display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
           margin-bottom: 16px;
@@ -1013,9 +953,9 @@ export default function VoiceLeadingExplorer() {
           box-shadow: 0 0 0 2px rgba(201,138,58,0.25);
         }
         .vl-trail-play {
-          margin-right: 4px;
           border-color: var(--brass);
         }
+        .vl-trail > .vl-play-group { margin-right: 4px; }
         .vl-trail-play.playing {
           background: rgba(201,138,58,0.18);
         }
@@ -1171,35 +1111,23 @@ export default function VoiceLeadingExplorer() {
             />
             <span className="vl-volume-value" style={{ width: 30 }}>{bpm}</span>
           </div>
-          <button
-            type="button"
-            className="vl-chip"
-            onClick={() => fileInputRef.current && fileInputRef.current.click()}
-          >
-            ↑ Use my own sample
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="audio/*"
-            multiple
-            style={{ display: "none" }}
-            onChange={handleSampleUpload}
-          />
           {audioError && <span className="vl-error" style={{ margin: 0 }}>{audioError}</span>}
         </div>
 
         {history.length > 1 && (
           <div className="vl-trail">
-            <button
-              type="button"
-              className={"vl-play-btn vl-trail-play" + (trailPlayingIdx !== null ? " playing" : "")}
-              onClick={playTrail}
-              aria-label={trailPlayingIdx !== null ? "Stop progression" : "Play progression"}
-              title={trailPlayingIdx !== null ? "Stop progression" : "Play progression"}
-            >
-              {trailPlayingIdx !== null ? "■" : "▶"}
-            </button>
+            <div className="vl-play-group">
+              <button
+                type="button"
+                className={"vl-play-btn vl-trail-play" + (trailPlayingIdx !== null ? " playing" : "")}
+                onClick={playTrail}
+                aria-label={trailPlayingIdx !== null ? "Stop progression" : "Play progression"}
+                title={trailPlayingIdx !== null ? "Stop progression" : "Play progression"}
+              >
+                {trailPlayingIdx !== null ? "■" : "▶"}
+              </button>
+              <span className="vl-play-label">Tap</span>
+            </div>
             <div className="vl-mode-toggle">
               {[["hold","Hold"],["hit","Hit"],["arp","Arp"],["mix-ha","Hold·Arp"],["mix-ah","Arp·Hold"]].map(([v, l]) => (
                 <button
@@ -1265,14 +1193,17 @@ export default function VoiceLeadingExplorer() {
                 <PianoKeys midis={notes} />
               </div>
               <div className="vl-inspect-actions">
-                <button
-                  type="button"
-                  className="vl-play-btn"
-                  onClick={() => playChord(notes, "inspect-" + inspectedIdx)}
-                  aria-label="Play this chord"
-                >
-                  {playingKey === "inspect-" + inspectedIdx ? "■" : "▶"}
-                </button>
+                <div className="vl-play-group">
+                  <button
+                    type="button"
+                    className="vl-play-btn"
+                    onClick={() => playChord(notes, "inspect-" + inspectedIdx)}
+                    aria-label="Play this chord"
+                  >
+                    {playingKey === "inspect-" + inspectedIdx ? "■" : "▶"}
+                  </button>
+                  <span className="vl-play-label">Tap</span>
+                </div>
                 {inspectedIdx < history.length - 1 && (
                   <button
                     type="button"
@@ -1315,14 +1246,17 @@ export default function VoiceLeadingExplorer() {
                   <span className="vl-current-notes">
                     {currentNotes.map(m => midiToName(m, key.flats)).join(" · ")}
                   </span>
-                  <button
-                    className="vl-play-btn"
-                    onClick={() => playChord(currentNotes, "current")}
-                    aria-label="Play current voicing"
-                    type="button"
-                  >
-                    {playingKey === "current" ? "■" : "▶"}
-                  </button>
+                  <div className="vl-play-group">
+                    <button
+                      className="vl-play-btn"
+                      onClick={() => playChord(currentNotes, "current")}
+                      aria-label="Play current voicing"
+                      type="button"
+                    >
+                      {playingKey === "current" ? "■" : "▶"}
+                    </button>
+                    <span className="vl-play-label">Tap</span>
+                  </div>
                 </div>
               </div>
               <div className="vl-piano-wrap">
@@ -1373,14 +1307,17 @@ export default function VoiceLeadingExplorer() {
                           );
                         })}
                       </div>
-                      <button
-                        className="vl-play-btn"
-                        onClick={() => playTransition(currentNotes, selectedNotes, r.key)}
-                        aria-label={"Play move to " + r.name}
-                        type="button"
-                      >
-                        {playingKey === r.key ? "■" : "▶"}
-                      </button>
+                      <div className="vl-play-group">
+                        <button
+                          className="vl-play-btn"
+                          onClick={() => playTransition(currentNotes, selectedNotes, r.key)}
+                          aria-label={"Play move to " + r.name}
+                          type="button"
+                        >
+                          {playingKey === r.key ? "■" : "▶"}
+                        </button>
+                        <span className="vl-play-label">Tap</span>
+                      </div>
                       <button
                         className="vl-row-apply"
                         type="button"
