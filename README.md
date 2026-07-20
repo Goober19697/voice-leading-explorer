@@ -12,7 +12,7 @@
 > harmonically related destinations by minimizing total voice
 > movement.**
 
-![Voice-Leading Explorer Interface](docs/hero.png)
+![Voice-Leading Explorer Interface](docs/hero1.png)
 
 ------------------------------------------------------------------------
 
