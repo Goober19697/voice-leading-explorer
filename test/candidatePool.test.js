@@ -58,3 +58,9 @@ test("voice-leading distance remains the primary ordering key", () => {
   const distant = { key: "distant", totalCost: 20, commonCount: 99 };
   assert.ok(compareCandidates(close, distant) < 0);
 });
+
+test("a candidate on a new root is offered before a same-root alternative", () => {
+  const sameRoot = { key: "same", totalCost: 1, commonCount: 4, rootChanged: false };
+  const newRoot = { key: "new", totalCost: 4, commonCount: 2, rootChanged: true };
+  assert.ok(compareCandidates(newRoot, sameRoot) < 0);
+});

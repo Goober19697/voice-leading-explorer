@@ -48,7 +48,7 @@ modules, and build a polished React application from the ground up.
 
 -   Analyze any chord voicing
 -   Generate every supported destination chord
--   Rank candidates by minimum semitone movement
+-   Prioritize new-root candidates, then rank by minimum semitone movement
 -   Distinct-note assignment using constrained backtracking
 -   Enharmonic deduplication with alternate analyses preserved
 
@@ -171,7 +171,7 @@ standalone/
 4.  Guarantee unique destination notes with a constrained backtracking
     search.
 5.  Remove duplicate note sets while preserving alternate chord names.
-6.  Rank every destination by total movement.
+6.  Put new-root destinations first, then rank each group by total movement.
 7.  Group the final results by emotional character.
 
 ------------------------------------------------------------------------

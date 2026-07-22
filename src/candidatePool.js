@@ -9,7 +9,11 @@ export function distinctCandidates(candidates) {
 }
 
 export function compareCandidates(a, b) {
-  return a.totalCost - b.totalCost || b.commonCount - a.commonCount || a.key.localeCompare(b.key);
+  // Progressions normally need harmonic motion, so offer a genuinely new
+  // root before alternate colors of the chord already under the fingers.
+  // Distance remains the primary ordering key within either group.
+  const rootChangeOrder = Number(Boolean(b.rootChanged)) - Number(Boolean(a.rootChanged));
+  return rootChangeOrder || a.totalCost - b.totalCost || b.commonCount - a.commonCount || a.key.localeCompare(b.key);
 }
 
 export function candidatesForEmotion(candidates, emotion) {

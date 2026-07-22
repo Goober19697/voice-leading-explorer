@@ -57,8 +57,8 @@ function nearestPitchOptions(midi, pc, count) {
 // classes such that every target MIDI note is distinct (no note doubled at
 // the exact same octave), minimizing total semitone movement. Small search
 // space (few notes, few candidates each) so plain backtracking is fine.
-function bestAssignment(notes, pcs) {
-  const candidatesPerNote = notes.map(note => {
+function bestAssignment(notes, pcs, rootPc) {
+  const candidatesPerNote = notes.map((note, noteIndex) => {
     const opts = [];
     for (const pc of pcs) {
       for (const t of nearestPitchOptions(note, pc, 2)) {
@@ -71,7 +71,13 @@ function bestAssignment(notes, pcs) {
         byTarget.set(o.target, o.cost);
       }
     }
-    const list = [...byTarget.entries()].map(([target, cost]) => ({ target, cost }));
+    let list = [...byTarget.entries()].map(([target, cost]) => ({ target, cost }));
+    // A named chord should be voiced from its own root, rather than retaining
+    // the previous chord's bass simply because that voice can stay still.
+    // The parser preserves the user's bass as notes[0].
+    if (noteIndex === 0) {
+      list = list.filter(({ target }) => ((target % 12) + 12) % 12 === rootPc);
+    }
     list.sort((a, b) => a.cost - b.cost);
     return list.slice(0, 8);
   });
@@ -587,7 +593,7 @@ export default function VoiceLeadingExplorer() {
     for (let root = 0; root < 12; root++) {
       for (const [suffix, intervals] of QUALITIES) {
         const pcs = intervals.map(iv => (root + iv) % 12);
-        const targets = bestAssignment(currentNotes, pcs);
+        const targets = bestAssignment(currentNotes, pcs, root);
         if (!targets) continue; // no feasible distinct-note assignment found
         const total = targets.reduce((s, t) => s + t.dist, 0);
         if (total === 0) continue; // identical to current voicing
@@ -606,6 +612,8 @@ export default function VoiceLeadingExplorer() {
         byNoteSet.set(setKey, {
           key: setKey,
           name: chordName,
+          rootPc: root,
+          rootChanged: fromChord ? root !== fromChord.rootPc : false,
           aliases: [],
           totalCost: total,
           commonCount: targets.filter(t => t.dist === 0).length,
@@ -1072,7 +1080,7 @@ export default function VoiceLeadingExplorer() {
         <div className="vl-eyebrow">Voicing → Voicing</div>
         <h1 className="vl-title">Voice-Leading Explorer</h1>
         <p className="vl-sub">
-          Enter a voicing. See every chord within reach, ranked by total semitone
+          Enter a voicing. Explore new-root chords first, ordered by total semitone
           travel across all your notes — with the emotional character of each move.
         </p>
 
