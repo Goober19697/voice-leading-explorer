@@ -7,6 +7,7 @@ import {
   compareCandidates,
   distinctCandidates,
   nextCandidateIndex,
+  previousCandidateIndex,
 } from "../src/candidatePool.js";
 
 const candidates = [
@@ -19,18 +20,24 @@ test("the initial selected candidate is index zero", () => {
   assert.equal(candidateAt(candidates, 0), candidates[0]);
 });
 
-test("rescramble advances through every candidate and wraps", () => {
+test("next advances through candidates in order and stops at the end", () => {
   let index = 0;
   index = nextCandidateIndex(index, candidates.length);
   assert.equal(index, 1);
   index = nextCandidateIndex(index, candidates.length);
   assert.equal(index, 2);
   index = nextCandidateIndex(index, candidates.length);
-  assert.equal(index, 0);
+  assert.equal(index, 2);
 });
 
 test("a single candidate cannot advance", () => {
   assert.equal(nextCandidateIndex(0, 1), 0);
+});
+
+test("back returns to the prior candidate and stops at the beginning", () => {
+  assert.equal(previousCandidateIndex(2), 1);
+  assert.equal(previousCandidateIndex(1), 0);
+  assert.equal(previousCandidateIndex(0), 0);
 });
 
 test("candidate pools remove duplicate physical voicings", () => {

@@ -1,8 +1,14 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import * as Tone from "tone";
 import { parseVoicing } from "./noteParsing.js";
-import { candidateAt, candidatesForEmotion, compareCandidates, nextCandidateIndex } from "./candidatePool.js";
-import { analyzeVoicing, QUALITIES } from "./chordPatterns.js";
+import {
+  candidateAt,
+  candidatesForEmotion,
+  compareCandidates,
+  nextCandidateIndex,
+  previousCandidateIndex,
+} from "./candidatePool.js";
+import { analyzeVoicing, analyzeVoicingOptions, QUALITIES } from "./chordPatterns.js";
 
 // ---------- music theory helpers ----------
 
@@ -112,6 +118,13 @@ function labelForNotes(midis, flats) {
   return names[a.rootPc] + a.suffix + (a.rootless ? " (rootless)" : "");
 }
 
+function labelsForNotes(midis, flats) {
+  const names = flats ? FLAT_NAMES : SHARP_NAMES;
+  return analyzeVoicingOptions(midis).map(a =>
+    names[a.rootPc] + a.suffix + (a.rootless ? " (rootless)" : "")
+  );
+}
+
 function detectChord(midis) {
   const a = analyzeVoicing(midis);
   return a ? { rootPc: a.rootPc, suffix: a.suffix } : null;
@@ -132,14 +145,18 @@ const SUFFIX_CATEGORY = {
   "6/9":      "warm",
   "add9":     "warm",
   "maj9":     "warm",
+  "maj13":    "warm",
   "m":        "sad",
   "m7":       "sad",
   "m9":       "sad",
+  "m11":      "sad",
+  "m13":      "sad",
   "m add9":   "sad",
   "m6":       "sad",
   "m6/9":     "sad",
   "7":        "tense",
   "9":        "tense",
+  "13":       "tense",
   "7b5":      "tense",
   "7#5":      "tense",
   "7b9":      "tense",
@@ -184,8 +201,12 @@ const QUALITY_MOOD = {
   "6/9":      "plush, contented",
   "m6/9":     "smoky, after-hours",
   "maj9":     "lush, expansive",
+  "maj13":    "radiant, richly at rest",
   "9":        "confident swagger",
   "m9":       "melancholy velvet",
+  "m11":      "deep, contemplative",
+  "m13":      "soulful, spacious melancholy",
+  "13":       "rich, soulful momentum",
   "7b5":      "lean, unsettled pull",
   "7#5":      "restless, augmented pull",
   "7b9":      "dark urgency",
@@ -549,6 +570,9 @@ export default function VoiceLeadingExplorer() {
     () => history[history.length - 1].label || labelForNotes(currentNotes, key.flats),
     [history, currentNotes, key]
   );
+  const currentOptionalLabels = useMemo(() => {
+    return labelsForNotes(currentNotes, key.flats).filter(label => label !== currentLabel);
+  }, [currentNotes, currentLabel, key]);
 
   const historyLabels = useMemo(() => {
     return history.map(entry => {
@@ -624,8 +648,12 @@ export default function VoiceLeadingExplorer() {
     setSelectedCandidateIndex(0);
   }
 
-  function rescramble() {
+  function showNextCandidate() {
     setSelectedCandidateIndex(index => nextCandidateIndex(index, candidates.length));
+  }
+
+  function showPreviousCandidate() {
+    setSelectedCandidateIndex(index => previousCandidateIndex(index));
   }
 
   function applyResult(r) {
@@ -749,6 +777,7 @@ export default function VoiceLeadingExplorer() {
         .vl-current-name {
           font-family: 'Fraunces', serif; font-weight: 600; font-size: 20px; color: var(--ink);
         }
+        .vl-current-aliases { margin-top: 3px; color: var(--ink-dim); font-size: 12px; }
         .vl-current-notes {
           font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--ink-dim);
         }
@@ -1239,9 +1268,14 @@ export default function VoiceLeadingExplorer() {
           <>
             <div className="vl-panel" style={{ paddingBottom: 16 }}>
               <div className="vl-current-row">
-                <span className="vl-current-name">
-                  {currentLabel || "Custom voicing"}
-                </span>
+                <div>
+                  <div className="vl-current-name">{currentLabel || "Custom voicing"}</div>
+                  {currentOptionalLabels.length > 0 && (
+                    <div className="vl-current-aliases">
+                      Also: {currentOptionalLabels.join(" / ")}
+                    </div>
+                  )}
+                </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span className="vl-current-notes">
                     {currentNotes.map(m => midiToName(m, key.flats)).join(" · ")}
@@ -1320,12 +1354,20 @@ export default function VoiceLeadingExplorer() {
                       <button
                         className="vl-row-apply"
                         type="button"
-                        onClick={rescramble}
-                        disabled={candidates.length < 2}
-                        aria-label="Try another nearby voicing with the same emotional character"
-                        title="Try another nearby voicing with the same emotional character"
+                        onClick={showPreviousCandidate}
+                        disabled={selectedCandidateIndex === 0}
+                        aria-label="Show the previous voicing"
                       >
-                        Rescramble
+                        Back
+                      </button>
+                      <button
+                        className="vl-row-apply"
+                        type="button"
+                        onClick={showNextCandidate}
+                        disabled={selectedCandidateIndex >= candidates.length - 1}
+                        aria-label="Show the next closest voicing"
+                      >
+                        Next
                       </button>
                       <button className="vl-row-apply" onClick={() => applyResult(r)}>
                         Add it →

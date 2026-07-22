@@ -61,6 +61,10 @@ const QUALITIES = [
   ["maj9",    [0,4,7,11,2]],
   ["9",       [0,4,7,10,2]],
   ["m9",      [0,3,7,10,2]],
+  ["m11",     [0,3,7,10,2,5]],
+  ["m13",     [0,3,7,10,5,9]],
+  ["maj13",   [0,4,7,11,2,9]],
+  ["13",      [0,4,7,10,2,9]],
   ["7♭9",     [0,4,7,10,1]],
   ["7♯9",     [0,4,7,10,3]],
   ["maj7♯11", [0,4,7,11,6]],
@@ -185,13 +189,14 @@ function movementColor(dist) {
 // - exact matches first
 // - tolerates an omitted 5th (shell voicings) and/or omitted root (rootless jazz voicings)
 // - prefers interpretations whose root is the bass note (A C E G → Am7, not C6)
-function analyzeVoicing(midis) {
-  if (!midis || midis.length < 2) return null;
+function analyzeVoicingOptions(midis) {
+  if (!midis || midis.length < 2) return [];
   const pcs = new Set(midis.map(m => ((m % 12) + 12) % 12));
   const bassPc = ((midis[0] % 12) + 12) % 12; // parser preserves the entered bass reference
-  let best = null;
+  const options = [];
   for (let root = 0; root < 12; root++) {
     const fifthPc = (root + 7) % 12;
+    let bestForRoot = null;
     for (const [suffix, intervals] of QUALITIES) {
       const chordSet = new Set(intervals.map(iv => (root + iv) % 12));
       // every played pitch class must belong to the chord
@@ -205,19 +210,28 @@ function analyzeVoicing(midis) {
       const missingFifth = missing.includes(fifthPc);
       // rank: exact < no-5th < rootless < rootless-no-5th; then bass-as-root; then simpler chords
       const tier = missing.length === 0 ? 0 : missingRoot ? (missingFifth ? 3 : 2) : 1;
-      const bassPenalty = !missingRoot && bassPc === root ? 0 : 1;
-      const score = [tier, bassPenalty, intervals.length];
+      const score = [tier, intervals.length];
       if (
-        !best ||
-        score[0] < best.score[0] ||
-        (score[0] === best.score[0] && (score[1] < best.score[1] ||
-          (score[1] === best.score[1] && score[2] < best.score[2])))
+        !bestForRoot ||
+        score[0] < bestForRoot.score[0] ||
+        (score[0] === bestForRoot.score[0] && score[1] < bestForRoot.score[1])
       ) {
-        best = { rootPc: root, suffix, rootless: missingRoot, score };
+        bestForRoot = { rootPc: root, suffix, rootless: missingRoot, score };
       }
     }
+    if (bestForRoot) options.push(bestForRoot);
   }
-  return best;
+  options.sort((a, b) => {
+    const aBass = a.rootPc === bassPc ? 0 : 1;
+    const bBass = b.rootPc === bassPc ? 0 : 1;
+    return aBass - bBass || a.score[0] - b.score[0] || a.score[1] - b.score[1];
+  });
+  const enteredRootOptions = options.filter(option => pcs.has(option.rootPc));
+  return enteredRootOptions.length > 0 ? enteredRootOptions : options.slice(0, 1);
+}
+
+function analyzeVoicing(midis) {
+  return analyzeVoicingOptions(midis)[0] || null;
 }
 
 function labelForNotes(midis, flats) {
@@ -225,6 +239,13 @@ function labelForNotes(midis, flats) {
   if (!a) return null;
   const names = flats ? FLAT_NAMES : SHARP_NAMES;
   return names[a.rootPc] + a.suffix + (a.rootless ? " (rootless)" : "");
+}
+
+function labelsForNotes(midis, flats) {
+  const names = flats ? FLAT_NAMES : SHARP_NAMES;
+  return analyzeVoicingOptions(midis).map(a =>
+    names[a.rootPc] + a.suffix + (a.rootless ? " (rootless)" : "")
+  );
 }
 
 function detectChord(midis) {
@@ -247,14 +268,18 @@ const SUFFIX_CATEGORY = {
   "6/9":      "warm",
   "add9":     "warm",
   "maj9":     "warm",
+  "maj13":    "warm",
   "m":        "sad",
   "m7":       "sad",
   "m9":       "sad",
+  "m11":      "sad",
+  "m13":      "sad",
   "m add9":   "sad",
   "m6":       "sad",
   "m6/9":     "sad",
   "7":        "tense",
   "9":        "tense",
+  "13":       "tense",
   "7♭9":      "tense",
   "7♯9":      "tense",
   "dim":      "tense",
@@ -291,8 +316,12 @@ const QUALITY_MOOD = {
   "6/9":      "plush, contented",
   "m6/9":     "smoky, after-hours",
   "maj9":     "lush, expansive",
+  "maj13":    "radiant, richly at rest",
   "9":        "confident swagger",
   "m9":       "melancholy velvet",
+  "m11":      "deep, contemplative",
+  "m13":      "soulful, spacious melancholy",
+  "13":       "rich, soulful momentum",
   "7♭9":      "dark urgency",
   "7♯9":      "gritty, defiant",
   "maj7♯11":  "bright wonder, lifted",
@@ -650,6 +679,9 @@ function VoiceLeadingExplorer() {
     () => history[history.length - 1].label || labelForNotes(currentNotes, key.flats),
     [history, currentNotes, key]
   );
+  const currentOptionalLabels = useMemo(() => {
+    return labelsForNotes(currentNotes, key.flats).filter(label => label !== currentLabel);
+  }, [currentNotes, currentLabel, key]);
 
   const historyLabels = useMemo(() => {
     return history.map(entry => {
@@ -831,6 +863,7 @@ function VoiceLeadingExplorer() {
         .vl-current-name {
           font-family: 'Fraunces', serif; font-weight: 600; font-size: 20px; color: var(--ink);
         }
+        .vl-current-aliases { margin-top: 3px; color: var(--ink-dim); font-size: 12px; }
         .vl-current-notes {
           font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--ink-dim);
         }
@@ -1346,9 +1379,14 @@ function VoiceLeadingExplorer() {
           <>
             <div className="vl-panel" style={{ paddingBottom: 16 }}>
               <div className="vl-current-row">
-                <span className="vl-current-name">
-                  {currentLabel || "Custom voicing"}
-                </span>
+                <div>
+                  <div className="vl-current-name">{currentLabel || "Custom voicing"}</div>
+                  {currentOptionalLabels.length > 0 && (
+                    <div className="vl-current-aliases">
+                      Also: {currentOptionalLabels.join(" / ")}
+                    </div>
+                  )}
+                </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span className="vl-current-notes">
                     {currentNotes.map(m => midiToName(m, key.flats)).join(" · ")}

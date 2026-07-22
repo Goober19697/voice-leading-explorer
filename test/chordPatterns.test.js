@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { chordLabel, CHORD_PATTERNS, QUALITIES } from "../src/chordPatterns.js";
+import { chordLabel, chordLabels, CHORD_PATTERNS, QUALITIES } from "../src/chordPatterns.js";
 import { parseVoicing } from "../src/noteParsing.js";
 
 function label(notes) {
@@ -64,4 +64,36 @@ test("ordinary chord families retain their identities", () => {
   for (const [notes, expected] of examples) {
     assert.equal(label(notes), expected, notes);
   }
+});
+
+test("extended eleventh and thirteenth voicings are recognized", () => {
+  const examples = [
+    ["C Eb G Bb D F", "Cm11"],
+    ["C E G B D A", "Cmaj13"],
+    ["C E G Bb D A", "C13"],
+    ["C Eb Bb D F", "Cm11"],
+    ["C E B D A", "Cmaj13"],
+    ["C E Bb D A", "C13"],
+  ];
+
+  for (const [notes, expected] of examples) {
+    assert.equal(label(notes), expected, notes);
+  }
+
+  assert.ok(QUALITIES.some(([suffix]) => suffix === "m11"));
+  assert.ok(QUALITIES.some(([suffix]) => suffix === "maj13"));
+  assert.ok(QUALITIES.some(([suffix]) => suffix === "13"));
+});
+
+test("the first entered note determines the primary name and other roots remain optional", () => {
+  assert.deepEqual(chordLabels(parseVoicing("C E G A").midis), ["C6", "Am7"]);
+  assert.deepEqual(chordLabels(parseVoicing("A C E G").midis), ["Am7", "C6"]);
+  assert.equal(label("C E G A"), "C6");
+  assert.equal(label("A C E G"), "Am7");
+});
+
+test("a root-first minor-thirteenth voicing may omit the ninth", () => {
+  const notes = parseVoicing("B D E F# G# A").midis;
+  assert.equal(chordLabel(notes), "Bm13");
+  assert.equal(chordLabels(notes)[0], "Bm13");
 });

@@ -22,6 +22,12 @@ export const CHORD_PATTERNS = [
   { suffix: "maj9", intervals: [0, 4, 7, 11, 2] },
   { suffix: "9", intervals: [0, 4, 7, 10, 2] },
   { suffix: "m9", intervals: [0, 3, 7, 10, 2] },
+  { suffix: "m11", intervals: [0, 3, 7, 10, 2, 5] },
+  // Practical minor-13 voicing: the 9th is commonly omitted while the 11th
+  // and 13th carry the extended color.
+  { suffix: "m13", intervals: [0, 3, 7, 10, 5, 9] },
+  { suffix: "maj13", intervals: [0, 4, 7, 11, 2, 9] },
+  { suffix: "13", intervals: [0, 4, 7, 10, 2, 9] },
   { suffix: "7b5", intervals: [0, 4, 6, 10], requiresRoot: true },
   { suffix: "7#5", intervals: [0, 4, 8, 10], requiresRoot: true },
   { suffix: "7b9", intervals: [0, 4, 7, 10, 1], requiresRoot: true },
@@ -37,14 +43,15 @@ export const CHORD_PATTERNS = [
 // Candidate generation and recognition deliberately share this registry.
 export const QUALITIES = CHORD_PATTERNS.map(({ suffix, intervals }) => [suffix, intervals]);
 
-export function analyzeVoicing(midis) {
-  if (!midis || midis.length < 2) return null;
+export function analyzeVoicingOptions(midis) {
+  if (!midis || midis.length < 2) return [];
   const pcs = new Set(midis.map(midi => ((midi % 12) + 12) % 12));
   const bassPc = ((midis[0] % 12) + 12) % 12;
-  let best = null;
+  const options = [];
 
   for (let root = 0; root < 12; root++) {
     const fifthPc = (root + 7) % 12;
+    let bestForRoot = null;
     for (const { suffix, intervals, requiresRoot = false } of CHORD_PATTERNS) {
       const chordSet = new Set(intervals.map(interval => (root + interval) % 12));
       if ([...pcs].some(pc => !chordSet.has(pc))) continue;
@@ -56,17 +63,28 @@ export function analyzeVoicing(midis) {
       if (requiresRoot && missingRoot) continue;
       const missingFifth = missing.includes(fifthPc);
       const tier = missing.length === 0 ? 0 : missingRoot ? (missingFifth ? 3 : 2) : 1;
-      const bassPenalty = !missingRoot && bassPc === root ? 0 : 1;
-      const score = [tier, bassPenalty, intervals.length];
+      const score = [tier, intervals.length];
 
-      if (!best || score.some((value, index) =>
-        value < best.score[index] && score.slice(0, index).every((earlier, i) => earlier === best.score[i])
+      if (!bestForRoot || score.some((value, index) =>
+        value < bestForRoot.score[index] && score.slice(0, index).every((earlier, i) => earlier === bestForRoot.score[i])
       )) {
-        best = { rootPc: root, suffix, rootless: missingRoot, score };
+        bestForRoot = { rootPc: root, suffix, rootless: missingRoot, score };
       }
     }
+    if (bestForRoot) options.push(bestForRoot);
   }
-  return best;
+
+  options.sort((a, b) => {
+    const aBass = a.rootPc === bassPc ? 0 : 1;
+    const bBass = b.rootPc === bassPc ? 0 : 1;
+    return aBass - bBass || a.score[0] - b.score[0] || a.score[1] - b.score[1];
+  });
+  const enteredRootOptions = options.filter(option => pcs.has(option.rootPc));
+  return enteredRootOptions.length > 0 ? enteredRootOptions : options.slice(0, 1);
+}
+
+export function analyzeVoicing(midis) {
+  return analyzeVoicingOptions(midis)[0] || null;
 }
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -75,4 +93,10 @@ export function chordLabel(midis, names = NOTE_NAMES) {
   const analysis = analyzeVoicing(midis);
   if (!analysis) return null;
   return names[analysis.rootPc] + analysis.suffix + (analysis.rootless ? " (rootless)" : "");
+}
+
+export function chordLabels(midis, names = NOTE_NAMES) {
+  return analyzeVoicingOptions(midis).map(analysis =>
+    names[analysis.rootPc] + analysis.suffix + (analysis.rootless ? " (rootless)" : "")
+  );
 }

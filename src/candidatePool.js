@@ -23,5 +23,9 @@ export function candidateAt(candidates, selectedCandidateIndex) {
 
 export function nextCandidateIndex(selectedCandidateIndex, candidateCount) {
   if (candidateCount < 2) return 0;
-  return (selectedCandidateIndex + 1) % candidateCount;
+  return Math.min(selectedCandidateIndex + 1, candidateCount - 1);
+}
+
+export function previousCandidateIndex(selectedCandidateIndex) {
+  return Math.max(selectedCandidateIndex - 1, 0);
 }
