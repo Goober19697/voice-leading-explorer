@@ -390,7 +390,7 @@ function VoiceLeadingExplorer() {
   const [error, setError] = useState(null);
   const [playingKey, setPlayingKey] = useState(null);
   const [audioError, setAudioError] = useState(null);
-  const [volume, setVolume] = useState(75); // 0-100
+  const [volume, setVolume] = useState(100); // 0-100
   const synthRef = useRef(null);
   const committedText = history[history.length - 1].text;
 
@@ -479,8 +479,8 @@ function VoiceLeadingExplorer() {
     return Tone.Frequency(midi, "midi").toFrequency();
   }
 
-  // global timing: adjustable BPM (70–180, default 93), chords last 2 measures (8 beats)
-  const [bpm, setBpm] = useState(93);
+  // global timing: adjustable BPM (70–180, default 180), chords last 2 measures (8 beats)
+  const [bpm, setBpm] = useState(180);
   const BEAT_MS = (60 / bpm) * 1000;
   const CHORD_MS = BEAT_MS * 8; // 2 measures of 4/4
 
@@ -1362,7 +1362,6 @@ function VoiceLeadingExplorer() {
                     >
                       {playingKey === "current" ? "■" : "▶"}
                     </button>
-                    <span className="vl-play-label">Tap</span>
                   </div>
                 </div>
               </div>
