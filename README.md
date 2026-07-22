@@ -111,7 +111,7 @@ Results are grouped into intuitive musical categories:
 
 ### Cloud
 
--   AWS deployment (planned)
+-   AWS deployment 
 
 ------------------------------------------------------------------------
 
