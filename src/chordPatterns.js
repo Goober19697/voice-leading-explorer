@@ -18,6 +18,7 @@ export const CHORD_PATTERNS = [
   { suffix: "m(maj7)b5", intervals: [0, 3, 6, 11] },
   { suffix: "aug maj7", intervals: [0, 4, 8, 11] },
   { suffix: "6/9", intervals: [0, 4, 7, 9, 2] },
+  { suffix: "6/9♯11", intervals: [0, 4, 7, 9, 2, 6] },
   { suffix: "m6/9", intervals: [0, 3, 7, 9, 2] },
   { suffix: "maj9", intervals: [0, 4, 7, 11, 2] },
   { suffix: "9", intervals: [0, 4, 7, 10, 2] },

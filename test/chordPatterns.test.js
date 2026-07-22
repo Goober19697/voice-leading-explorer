@@ -97,3 +97,10 @@ test("a root-first minor-thirteenth voicing may omit the ninth", () => {
   assert.equal(chordLabel(notes), "Bm13");
   assert.equal(chordLabels(notes)[0], "Bm13");
 });
+
+test("a C-first 6/9 sharp-eleven voicing is not named from A", () => {
+  const notes = parseVoicing("C E G D F# A").midis;
+  assert.equal(chordLabel(notes), "C6/9♯11");
+  assert.equal(chordLabels(notes)[0], "C6/9♯11");
+  assert.ok(chordLabels(notes).includes("Am13"));
+});
