@@ -28,6 +28,7 @@ export const CHORD_PATTERNS = [
   // and 13th carry the extended color.
   { suffix: "m13", intervals: [0, 3, 7, 10, 5, 9] },
   { suffix: "maj13", intervals: [0, 4, 7, 11, 2, 9] },
+  { suffix: "maj13♯11", intervals: [0, 4, 7, 11, 2, 6, 9] },
   { suffix: "13", intervals: [0, 4, 7, 10, 2, 9] },
   { suffix: "7b5", intervals: [0, 4, 6, 10], requiresRoot: true },
   { suffix: "7#5", intervals: [0, 4, 8, 10], requiresRoot: true },
@@ -81,7 +82,24 @@ export function analyzeVoicingOptions(midis) {
     return aBass - bBass || a.score[0] - b.score[0] || a.score[1] - b.score[1];
   });
   const enteredRootOptions = options.filter(option => pcs.has(option.rootPc));
-  return enteredRootOptions.length > 0 ? enteredRootOptions : options.slice(0, 1);
+  if (enteredRootOptions.some(option => option.rootPc === bassPc)) return enteredRootOptions;
+
+  // Never assign the primary name to a different entered note merely because
+  // the first-note quality is not in the registry yet. Describe its intervals
+  // from the user's chosen root, then retain recognized alternatives after it.
+  const intervalNames = ["", "♭9", "9", "♭3", "3", "11", "♯11", "5", "♭13", "13", "♭7", "maj7"];
+  const relativeIntervals = [...pcs]
+    .map(pc => (pc - bassPc + 12) % 12)
+    .filter(interval => interval !== 0)
+    .sort((a, b) => a - b);
+  const fallback = {
+    rootPc: bassPc,
+    suffix: `(${relativeIntervals.map(interval => intervalNames[interval]).join(",")})`,
+    rootless: false,
+    fallback: true,
+    score: [99, 99],
+  };
+  return [fallback, ...enteredRootOptions];
 }
 
 export function analyzeVoicing(midis) {

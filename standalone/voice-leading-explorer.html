@@ -65,6 +65,7 @@ const QUALITIES = [
   ["m11",     [0,3,7,10,2,5]],
   ["m13",     [0,3,7,10,5,9]],
   ["maj13",   [0,4,7,11,2,9]],
+  ["maj13♯11",[0,4,7,11,2,6,9]],
   ["13",      [0,4,7,10,2,9]],
   ["7♭9",     [0,4,7,10,1]],
   ["7♯9",     [0,4,7,10,3]],
@@ -228,7 +229,20 @@ function analyzeVoicingOptions(midis) {
     return aBass - bBass || a.score[0] - b.score[0] || a.score[1] - b.score[1];
   });
   const enteredRootOptions = options.filter(option => pcs.has(option.rootPc));
-  return enteredRootOptions.length > 0 ? enteredRootOptions : options.slice(0, 1);
+  if (enteredRootOptions.some(option => option.rootPc === bassPc)) return enteredRootOptions;
+  const intervalNames = ["", "♭9", "9", "♭3", "3", "11", "♯11", "5", "♭13", "13", "♭7", "maj7"];
+  const relativeIntervals = [...pcs]
+    .map(pc => (pc - bassPc + 12) % 12)
+    .filter(interval => interval !== 0)
+    .sort((a, b) => a - b);
+  const fallback = {
+    rootPc: bassPc,
+    suffix: `(${relativeIntervals.map(interval => intervalNames[interval]).join(",")})`,
+    rootless: false,
+    fallback: true,
+    score: [99, 99],
+  };
+  return [fallback, ...enteredRootOptions];
 }
 
 function analyzeVoicing(midis) {
@@ -286,6 +300,7 @@ const SUFFIX_CATEGORY = {
   "dim":      "tense",
   "dim7":     "tense",
   "m7♭5":     "tense",
+  "maj13♯11": "dreamy",
   "6/9♯11":   "dreamy",
   "sus2":     "dreamy",
   "sus4":     "dreamy",
@@ -320,6 +335,7 @@ const QUALITY_MOOD = {
   "m6/9":     "smoky, after-hours",
   "maj9":     "lush, expansive",
   "maj13":    "radiant, richly at rest",
+  "maj13♯11": "radiant, limitless wonder",
   "9":        "confident swagger",
   "m9":       "melancholy velvet",
   "m11":      "deep, contemplative",
@@ -661,13 +677,6 @@ function VoiceLeadingExplorer() {
   }
 
   const [inspectedIdx, setInspectedIdx] = useState(null); // which trail chip's notes are shown
-
-  function jumpToHistory(index) {
-    setHistory(h => h.slice(0, index + 1));
-    setRawText(history[index].text);
-    setError(null);
-    setInspectedIdx(null);
-  }
 
   function removeFromTrail(index) {
     if (history.length <= 1) return; // always keep at least the current voicing
@@ -1347,15 +1356,6 @@ function VoiceLeadingExplorer() {
                   </button>
                   <span className="vl-play-label">Tap</span>
                 </div>
-                {inspectedIdx < history.length - 1 && (
-                  <button
-                    type="button"
-                    className="vl-row-apply"
-                    onClick={() => jumpToHistory(inspectedIdx)}
-                  >
-                    Rewind trail to here
-                  </button>
-                )}
                 {history.length > 1 && (
                   <button
                     type="button"

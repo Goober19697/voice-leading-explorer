@@ -168,6 +168,7 @@ const SUFFIX_CATEGORY = {
   "dim":      "tense",
   "dim7":     "tense",
   "m7b5":     "tense",
+  "maj13♯11": "dreamy",
   "6/9♯11":   "dreamy",
   "sus2":     "dreamy",
   "sus4":     "dreamy",
@@ -204,6 +205,7 @@ const QUALITY_MOOD = {
   "m6/9":     "smoky, after-hours",
   "maj9":     "lush, expansive",
   "maj13":    "radiant, richly at rest",
+  "maj13♯11": "radiant, limitless wonder",
   "9":        "confident swagger",
   "m9":       "melancholy velvet",
   "m11":      "deep, contemplative",
@@ -551,13 +553,6 @@ export default function VoiceLeadingExplorer() {
   }
 
   const [inspectedIdx, setInspectedIdx] = useState(null); // which trail chip's notes are shown
-
-  function jumpToHistory(index) {
-    setHistory(h => h.slice(0, index + 1));
-    setRawText(history[index].text);
-    setError(null);
-    setInspectedIdx(null);
-  }
 
   function removeFromTrail(index) {
     if (history.length <= 1) return; // always keep at least the current voicing
@@ -1235,15 +1230,6 @@ export default function VoiceLeadingExplorer() {
                   </button>
                   <span className="vl-play-label">Tap</span>
                 </div>
-                {inspectedIdx < history.length - 1 && (
-                  <button
-                    type="button"
-                    className="vl-row-apply"
-                    onClick={() => jumpToHistory(inspectedIdx)}
-                  >
-                    Rewind trail to here
-                  </button>
-                )}
                 {history.length > 1 && (
                   <button
                     type="button"

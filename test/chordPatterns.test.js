@@ -27,9 +27,9 @@ test("all compact altered-dominant formulas are recognized", () => {
   assert.notEqual(label("C# F G C"), "A7#5#9 (rootless)");
 });
 
-test("altered-dominant recognition ignores input order and octave", () => {
+test("altered-dominant recognition ignores order after the chosen root and octave", () => {
   assert.equal(label("A3 C#4 F4 G4 C5"), "A7#5#9");
-  assert.equal(label("C5 A3 G4 F4 C#4"), "A7#5#9");
+  assert.equal(label("A3 C5 G4 F4 C#4"), "A7#5#9");
   assert.equal(label("A C# F G C"), "A7#5#9");
 });
 
@@ -103,4 +103,16 @@ test("a C-first 6/9 sharp-eleven voicing is not named from A", () => {
   assert.equal(chordLabel(notes), "C6/9♯11");
   assert.equal(chordLabels(notes)[0], "C6/9♯11");
   assert.ok(chordLabels(notes).includes("Am13"));
+});
+
+test("a complete C major-thirteen sharp-eleven is recognized from C", () => {
+  const notes = parseVoicing("C3 E3 G3 B3 D4 F#4 A4").midis;
+  assert.equal(chordLabel(notes), "Cmaj13♯11");
+  assert.equal(chordLabels(notes)[0], "Cmaj13♯11");
+});
+
+test("an unregistered collection still receives a first-note-rooted analysis", () => {
+  const labels = chordLabels(parseVoicing("C Db E G").midis);
+  assert.match(labels[0], /^C\(/);
+  assert.notEqual(labels[0], "Custom voicing");
 });
