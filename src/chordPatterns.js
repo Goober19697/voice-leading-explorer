@@ -5,6 +5,7 @@ export const CHORD_PATTERNS = [
   { suffix: "aug", intervals: [0, 4, 8] },
   { suffix: "sus4", intervals: [0, 5, 7] },
   { suffix: "sus2", intervals: [0, 2, 7] },
+  { suffix: "7sus", intervals: [0, 2, 7, 10] },
   { suffix: "add9", intervals: [0, 4, 7, 2] },
   { suffix: "m add9", intervals: [0, 3, 7, 2] },
   { suffix: "6", intervals: [0, 4, 7, 9] },
@@ -24,6 +25,9 @@ export const CHORD_PATTERNS = [
   { suffix: "9", intervals: [0, 4, 7, 10, 2] },
   { suffix: "m9", intervals: [0, 3, 7, 10, 2] },
   { suffix: "m11", intervals: [0, 3, 7, 10, 2, 5] },
+  // Practical minor-11 voicing: the defining minor 3rd and minor 7th are
+  // present, while the 9th may be omitted beneath the 11th.
+  { suffix: "m11", intervals: [0, 3, 7, 10, 5] },
   // Practical minor-13 voicing: the 9th is commonly omitted while the 11th
   // and 13th carry the extended color.
   { suffix: "m13", intervals: [0, 3, 7, 10, 5, 9] },
@@ -66,29 +70,52 @@ export function analyzeVoicingOptions(midis, { includeUnplayedRoots = false } = 
       const missingFifth = missing.includes(fifthPc);
       const tier = missing.length === 0 ? 0 : missingRoot ? (missingFifth ? 3 : 2) : 1;
       const score = [tier, intervals.length];
+      const hasPlayedThird = [3, 4].some(interval =>
+        intervals.includes(interval) && pcs.has((root + interval) % 12)
+      );
+      const hasPlayedSeventh = [10, 11].some(interval =>
+        intervals.includes(interval) && pcs.has((root + interval) % 12)
+      );
 
       if (!bestForRoot || score.some((value, index) =>
         value < bestForRoot.score[index] && score.slice(0, index).every((earlier, i) => earlier === bestForRoot.score[i])
       )) {
-        bestForRoot = { rootPc: root, suffix, rootless: missingRoot, score };
+        bestForRoot = {
+          rootPc: root,
+          suffix,
+          rootless: missingRoot,
+          hasPlayedThird,
+          hasPlayedSeventh,
+          score,
+        };
       }
     }
     if (bestForRoot) options.push(bestForRoot);
   }
 
   options.sort((a, b) => {
+    const aThirdAndSeventh = a.hasPlayedThird && a.hasPlayedSeventh ? 0 : 1;
+    const bThirdAndSeventh = b.hasPlayedThird && b.hasPlayedSeventh ? 0 : 1;
+    const aThird = a.hasPlayedThird ? 0 : 1;
+    const bThird = b.hasPlayedThird ? 0 : 1;
+    const aSeventh = a.hasPlayedSeventh ? 0 : 1;
+    const bSeventh = b.hasPlayedSeventh ? 0 : 1;
     const aBass = a.rootPc === bassPc ? 0 : 1;
     const bBass = b.rootPc === bassPc ? 0 : 1;
-    return aBass - bBass || a.score[0] - b.score[0] || a.score[1] - b.score[1];
+    return aThirdAndSeventh - bThirdAndSeventh ||
+      a.score[0] - b.score[0] || aThird - bThird || aSeventh - bSeventh ||
+      aBass - bBass || a.score[1] - b.score[1];
   });
   if (includeUnplayedRoots) return options;
 
   const enteredRootOptions = options.filter(option => pcs.has(option.rootPc));
-  if (enteredRootOptions.some(option => option.rootPc === bassPc)) return enteredRootOptions;
+  // Prefer any recognized chord name over a generated interval list. The bass
+  // still wins when it is one of the recognized roots because `options` was
+  // sorted that way above; otherwise the best conventional analysis leads.
+  if (enteredRootOptions.length > 0) return enteredRootOptions;
 
-  // Never assign the primary name to a different entered note merely because
-  // the first-note quality is not in the registry yet. Describe its intervals
-  // from the user's chosen root, then retain recognized alternatives after it.
+  // Use an interval description only when the registry has no conventional
+  // chord name rooted on any of the notes in the voicing.
   const intervalNames = ["", "♭9", "9", "♭3", "3", "11", "♯11", "5", "♭13", "13", "♭7", "maj7"];
   const relativeIntervals = [...pcs]
     .map(pc => (pc - bassPc + 12) % 12)

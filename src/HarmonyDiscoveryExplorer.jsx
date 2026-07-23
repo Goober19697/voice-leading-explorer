@@ -1,90 +1,32 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Voice-Leading Explorer</title>
-<style>html, body { margin: 0; padding: 0; background: #1B1D2A; }</style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-</head>
-<body>
-<div id="root"></div>
-<script type="text/babel" data-presets="react">
-const { useState, useMemo, useRef, useEffect } = React;
-// Tone is a global from the CDN script
+import React, { useState, useMemo, useRef, useEffect } from "react";
+import * as Tone from "tone";
+import {
+  inferUseFlats,
+  KEY_NAMES,
+  keyUsesFlats,
+  normalizeVoicingSpelling,
+  parseVoicing,
+  spellMidiForChord,
+} from "./noteParsing.js";
+import {
+  negativeHarmony,
+  negativeHarmonyLabel,
+  negativeHarmonyUsesFlats,
+} from "./negativeHarmony.js";
+import {
+  candidateNaming,
+  candidateAt,
+  candidatesForEmotion,
+  compareCandidates,
+  nextCandidateIndex,
+  previousCandidateIndex,
+} from "./candidatePool.js";
+import { analyzeVoicing, analyzeVoicingOptions, QUALITIES } from "./chordPatterns.js";
 
 // ---------- music theory helpers ----------
 
-const PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const SHARP_NAMES = ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"];
 const FLAT_NAMES  = ["C","D♭","D","E♭","E","F","G♭","G","A♭","A","B♭","B"];
-
-const KEYS = [
-  { name: "C",  root: 0,  flats: false },
-  { name: "G",  root: 7,  flats: false },
-  { name: "D",  root: 2,  flats: false },
-  { name: "A",  root: 9,  flats: false },
-  { name: "E",  root: 4,  flats: false },
-  { name: "B",  root: 11, flats: false },
-  { name: "F♯", root: 6,  flats: false },
-  { name: "D♭", root: 1,  flats: true },
-  { name: "A♭", root: 8,  flats: true },
-  { name: "E♭", root: 3,  flats: true },
-  { name: "B♭", root: 10, flats: true },
-  { name: "F",  root: 5,  flats: true },
-];
-
-// [suffix, intervals]
-const QUALITIES = [
-  ["",        [0,4,7]],
-  ["m",       [0,3,7]],
-  ["dim",     [0,3,6]],
-  ["aug",     [0,4,8]],
-  ["sus4",    [0,5,7]],
-  ["sus2",    [0,2,7]],
-  ["add9",    [0,4,7,2]],
-  ["m add9",  [0,3,7,2]],
-  ["6",       [0,4,7,9]],
-  ["m6",      [0,3,7,9]],
-  ["maj7",    [0,4,7,11]],
-  ["7",       [0,4,7,10]],
-  ["m7",      [0,3,7,10]],
-  ["m7♭5",    [0,3,6,10]],
-  ["dim7",    [0,3,6,9]],
-  ["m maj7",  [0,3,7,11]],
-  ["aug maj7",[0,4,8,11]],
-  ["6/9",     [0,4,7,9,2]],
-  ["6/9♯11",  [0,4,7,9,2,6]],
-  ["m6/9",    [0,3,7,9,2]],
-  ["maj9",    [0,4,7,11,2]],
-  ["9",       [0,4,7,10,2]],
-  ["m9",      [0,3,7,10,2]],
-  ["m11",     [0,3,7,10,2,5]],
-  ["m13",     [0,3,7,10,5,9]],
-  ["maj13",   [0,4,7,11,2,9]],
-  ["maj13♯11",[0,4,7,11,2,6,9]],
-  ["13",      [0,4,7,10,2,9]],
-  ["7♭9",     [0,4,7,10,1]],
-  ["7♯9",     [0,4,7,10,3]],
-  ["maj7♯11", [0,4,7,11,6]],
-  ["7♯11",    [0,4,7,10,6]],
-];
-
-function parseNoteToken(str) {
-  const match = str.trim().match(/^([A-Ga-g])([#♯b♭]?)(-?\d+)?$/);
-  if (!match) return null;
-  const [, letter, accidental, octaveText] = match;
-  let pitchClass = PC[letter.toUpperCase()];
-  if (accidental === "#" || accidental === "♯") pitchClass += 1;
-  if (accidental === "b" || accidental === "♭") pitchClass -= 1;
-  return {
-    pitchClass: ((pitchClass % 12) + 12) % 12,
-    octave: octaveText === undefined ? null : parseInt(octaveText, 10),
-  };
-}
 
 function toneName(midi) {
   const names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
@@ -128,6 +70,9 @@ function bestAssignment(notes, pcs, rootPc) {
       }
     }
     let list = [...byTarget.entries()].map(([target, cost]) => ({ target, cost }));
+    // A named chord should be voiced from its own root, rather than retaining
+    // the previous chord's bass simply because that voice can stay still.
+    // The parser preserves the user's bass as notes[0].
     if (noteIndex === 0) {
       list = list.filter(({ target }) => ((target % 12) + 12) % 12 === rootPc);
     }
@@ -164,94 +109,10 @@ function bestAssignment(notes, pcs, rootPc) {
   return bestAssigned;
 }
 
-function parseVoicing(text) {
-  const tokens = text.split(/[\s,]+/).filter(Boolean);
-  const notes = [];
-  const invalidTokens = [];
-  for (const token of tokens) {
-    const note = parseNoteToken(token);
-    if (!note) invalidTokens.push(token);
-    else notes.push(note);
-  }
-  const hasOctaves = notes.some(note => note.octave !== null);
-  const hasMissingOctaves = notes.some(note => note.octave === null);
-  const mixedOctaves = hasOctaves && hasMissingOctaves;
-  if (mixedOctaves) return { midis: [], invalidTokens, mixedOctaves: true };
-  const midis = notes.map((note, index) => {
-    const octave = note.octave === null ? (index === 0 ? 3 : 4) : note.octave;
-    return (octave + 1) * 12 + note.pitchClass;
-  });
-  return { midis, invalidTokens, mixedOctaves: false };
-}
-
 function movementColor(dist) {
   if (dist === 0) return "var(--sage)";
   if (dist <= 2) return "var(--brass)";
   return "var(--rust)";
-}
-
-// Core chord analyzer. Finds the best-fitting chord name for a set of notes:
-// - exact matches first
-// - tolerates an omitted 5th (shell voicings) and/or omitted root (rootless jazz voicings)
-// - prefers interpretations whose root is the bass note (A C E G → Am7, not C6)
-function analyzeVoicingOptions(midis, { includeUnplayedRoots = false } = {}) {
-  if (!midis || midis.length < 2) return [];
-  const pcs = new Set(midis.map(m => ((m % 12) + 12) % 12));
-  const bassPc = ((midis[0] % 12) + 12) % 12; // parser preserves the entered bass reference
-  const options = [];
-  for (let root = 0; root < 12; root++) {
-    const fifthPc = (root + 7) % 12;
-    let bestForRoot = null;
-    for (const [suffix, intervals] of QUALITIES) {
-      const chordSet = new Set(intervals.map(iv => (root + iv) % 12));
-      // every played pitch class must belong to the chord
-      let subset = true;
-      for (const p of pcs) if (!chordSet.has(p)) { subset = false; break; }
-      if (!subset) continue;
-      // whatever the chord has that we didn't play may only be the 5th and/or root
-      const missing = [...chordSet].filter(p => !pcs.has(p));
-      if (missing.some(p => p !== root && p !== fifthPc)) continue;
-      const missingRoot = missing.includes(root);
-      const missingFifth = missing.includes(fifthPc);
-      // rank: exact < no-5th < rootless < rootless-no-5th; then bass-as-root; then simpler chords
-      const tier = missing.length === 0 ? 0 : missingRoot ? (missingFifth ? 3 : 2) : 1;
-      const score = [tier, intervals.length];
-      if (
-        !bestForRoot ||
-        score[0] < bestForRoot.score[0] ||
-        (score[0] === bestForRoot.score[0] && score[1] < bestForRoot.score[1])
-      ) {
-        bestForRoot = { rootPc: root, suffix, rootless: missingRoot, score };
-      }
-    }
-    if (bestForRoot) options.push(bestForRoot);
-  }
-  options.sort((a, b) => {
-    const aBass = a.rootPc === bassPc ? 0 : 1;
-    const bBass = b.rootPc === bassPc ? 0 : 1;
-    return aBass - bBass || a.score[0] - b.score[0] || a.score[1] - b.score[1];
-  });
-  if (includeUnplayedRoots) return options;
-
-  const enteredRootOptions = options.filter(option => pcs.has(option.rootPc));
-  if (enteredRootOptions.some(option => option.rootPc === bassPc)) return enteredRootOptions;
-  const intervalNames = ["", "♭9", "9", "♭3", "3", "11", "♯11", "5", "♭13", "13", "♭7", "maj7"];
-  const relativeIntervals = [...pcs]
-    .map(pc => (pc - bassPc + 12) % 12)
-    .filter(interval => interval !== 0)
-    .sort((a, b) => a - b);
-  const fallback = {
-    rootPc: bassPc,
-    suffix: `(${relativeIntervals.map(interval => intervalNames[interval]).join(",")})`,
-    rootless: false,
-    fallback: true,
-    score: [99, 99],
-  };
-  return [fallback, ...enteredRootOptions];
-}
-
-function analyzeVoicing(midis) {
-  return analyzeVoicingOptions(midis)[0] || null;
 }
 
 function labelForNotes(midis, flats) {
@@ -298,13 +159,20 @@ const SUFFIX_CATEGORY = {
   "m6":       "sad",
   "m6/9":     "sad",
   "7":        "tense",
+  "7sus":     "tense",
   "9":        "tense",
   "13":       "tense",
-  "7♭9":      "tense",
-  "7♯9":      "tense",
+  "7b5":      "tense",
+  "7#5":      "tense",
+  "7b9":      "tense",
+  "7#9":      "tense",
+  "7b5b9":    "tense",
+  "7b5#9":    "tense",
+  "7#5b9":    "tense",
+  "7#5#9":    "tense",
   "dim":      "tense",
   "dim7":     "tense",
-  "m7♭5":     "tense",
+  "m7b5":     "tense",
   "maj13♯11": "dreamy",
   "6/9♯11":   "dreamy",
   "sus2":     "dreamy",
@@ -313,7 +181,8 @@ const SUFFIX_CATEGORY = {
   "aug maj7": "dreamy",
   "maj7♯11":  "dreamy",
   "7♯11":     "dreamy",
-  "m maj7":   "dreamy",
+  "m(maj7)":  "dreamy",
+  "m(maj7)b5":"dreamy",
 };
 
 // emotional character of each chord quality
@@ -330,10 +199,12 @@ const QUALITY_MOOD = {
   "m6":       "noir, wistful",
   "maj7":     "warm, at rest",
   "7":        "restless, pulling to resolve",
+  "7sus":     "suspended dominant pull",
   "m7":       "mellow, conversational",
-  "m7♭5":     "anxious, searching",
+  "m7b5":     "anxious, searching",
   "dim7":     "coiled tension",
-  "m maj7":   "uneasy beauty, noir",
+  "m(maj7)":  "uneasy beauty, noir",
+  "m(maj7)b5":"uneasy beauty, noir",
   "aug maj7": "surreal shimmer",
   "6/9":      "plush, contented",
   "6/9♯11":   "luminous, open-ended",
@@ -346,8 +217,14 @@ const QUALITY_MOOD = {
   "m11":      "deep, contemplative",
   "m13":      "soulful, spacious melancholy",
   "13":       "rich, soulful momentum",
-  "7♭9":      "dark urgency",
-  "7♯9":      "gritty, defiant",
+  "7b5":      "lean, unsettled pull",
+  "7#5":      "restless, augmented pull",
+  "7b9":      "dark urgency",
+  "7#9":      "gritty, defiant",
+  "7b5b9":    "dark urgency",
+  "7b5#9":    "gritty, unstable pull",
+  "7#5b9":    "dark, augmented urgency",
+  "7#5#9":    "gritty, defiant",
   "maj7♯11":  "bright wonder, lifted",
   "7♯11":     "sly, iridescent",
 };
@@ -371,41 +248,6 @@ function motionMood(fromRootPc, toRootPc) {
     case 7:  return "fifth motion — propulsive, classic";
     default: return null;
   }
-}
-
-function negativeHarmony(midis) {
-  if (!midis || midis.length === 0) return [];
-  const pivot = midis[0];
-  return midis
-    .map(midi => pivot - (midi - pivot))
-    .sort((a, b) => a - b);
-}
-
-const CONVENTIONAL_ROOT_NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
-const FLAT_ROOTS = new Set([3, 8, 10]);
-
-function negativeHarmonyAnalysis(midis) {
-  const recognized = analyzeVoicingOptions(midis, { includeUnplayedRoots: true })
-    .filter(option => !option.fallback)
-    .sort((a, b) =>
-      Number(a.rootless) - Number(b.rootless) ||
-      (a.rootless && b.rootless
-        ? b.score[1] - a.score[1]
-        : a.score[0] - b.score[0] || a.score[1] - b.score[1])
-    )[0];
-  return recognized || analyzeVoicingOptions(midis)[0] || null;
-}
-
-function negativeHarmonyLabel(midis) {
-  const recognized = negativeHarmonyAnalysis(midis);
-  if (!recognized) return "Negative harmony";
-  return CONVENTIONAL_ROOT_NAMES[recognized.rootPc] + recognized.suffix +
-    (recognized.rootless ? " (rootless)" : "");
-}
-
-function negativeHarmonyUsesFlats(midis) {
-  const recognized = negativeHarmonyAnalysis(midis);
-  return recognized ? FLAT_ROOTS.has(recognized.rootPc) : false;
 }
 
 // ---------- piano keyboard visual ----------
@@ -496,14 +338,14 @@ function PianoKeys({ midis, flats = false }) {
 
 // ---------- component ----------
 
-function VoiceLeadingExplorer() {
+export default function HarmonyDiscoveryExplorer() {
   const [rawText, setRawText] = useState("");
   const [history, setHistory] = useState([{ text: "", label: null }]); // trail of committed voicings
-  const [useFlats, setUseFlats] = useState(false); // spelling preference
   const [error, setError] = useState(null);
   const [playingKey, setPlayingKey] = useState(null);
   const [audioError, setAudioError] = useState(null);
   const [showNegativeHarmony, setShowNegativeHarmony] = useState(false);
+  const [bassOrder, setBassOrder] = useState("ascending");
   const [volume, setVolume] = useState(100); // 0-100
   const synthRef = useRef(null);
   const committedText = history[history.length - 1].text;
@@ -636,10 +478,9 @@ function VoiceLeadingExplorer() {
   const currentNotes = parsed && parsed.midis.length ? parsed.midis : null;
   const negativeNotes = useMemo(() => negativeHarmony(currentNotes), [currentNotes]);
   const negativeUsesFlats = useMemo(() => negativeHarmonyUsesFlats(negativeNotes), [negativeNotes]);
-  const key = { flats: useFlats };
-  useEffect(() => {
-    setShowNegativeHarmony(false);
-  }, [committedText]);
+  const currentAnalysis = useMemo(() => analyzeVoicing(currentNotes), [currentNotes]);
+  const useFlats = inferUseFlats(committedText, currentAnalysis?.rootPc);
+  const key = useMemo(() => ({ flats: useFlats }), [useFlats]);
 
   // --- progression (trail) playback ---
   const [trailPlayingIdx, setTrailPlayingIdx] = useState(null); // which chip is sounding
@@ -725,7 +566,7 @@ function VoiceLeadingExplorer() {
   function handleSubmit() {
     const result = parseVoicing(rawText);
     if (result.mixedOctaves) {
-      setError("Please choose one input mode:\n\n• Exact Voicing\n  Example: A3 C4 E4\n\n• Default Middle Voicing\n  Example: A C E\n\nUse one mode consistently for all notes.");
+      setError("Please choose one input mode:\n\n• Exact Voicing\n  Example: A3 C4 E4\n\n• Default Voicing — Third Range\n  Example: A C E\n\nUse one mode consistently for all notes.");
       return;
     }
     if (result.midis.length === 0) {
@@ -736,8 +577,13 @@ function VoiceLeadingExplorer() {
     if (result.invalidTokens.length) {
       messages.push("Skipped " + result.invalidTokens.map(t => `"${t}"`).join(", ") + " — not a note I recognize.");
     }
+    const analysis = analyzeVoicing(result.midis);
+    const normalizedText = analysis
+      ? normalizeVoicingSpelling(rawText, result.midis, analysis.rootPc, analysis.suffix)
+      : rawText;
     setError(messages.length ? messages.join(" ") : null);
-    setHistory(h => [...h.slice(0, -1), { text: rawText, label: null }]); // replace current position — only "Move here" grows the trail
+    setRawText(normalizedText);
+    setHistory(h => [...h.slice(0, -1), { text: normalizedText, label: null }]); // replace current position — only "Add to" grows the trail
   }
 
   function handleInputKeyDown(e) {
@@ -777,7 +623,7 @@ function VoiceLeadingExplorer() {
   const results = useMemo(() => {
     if (!currentNotes) return [];
     const fromChord = detectChord(currentNotes);
-    const names = key.flats ? FLAT_NAMES : SHARP_NAMES;
+    const names = KEY_NAMES;
     const byNoteSet = new Map(); // sorted target midis -> entry
     for (let root = 0; root < 12; root++) {
       for (const [suffix, intervals] of QUALITIES) {
@@ -787,39 +633,50 @@ function VoiceLeadingExplorer() {
         const total = targets.reduce((s, t) => s + t.dist, 0);
         if (total === 0) continue; // identical to current voicing
         const setKey = targets.map(t => t.to).sort((a, b) => a - b).join(",");
-        const chordName = names[root] + (suffix || "");
+        const generatedName = names[root] + (suffix || "");
         const existing = byNoteSet.get(setKey);
         if (existing) {
           // same physical notes, different analysis — keep as alias
-          if (!existing.aliases.includes(chordName) && existing.name !== chordName) {
-            existing.aliases.push(chordName);
+          if (!existing.aliases.includes(generatedName) && existing.name !== generatedName) {
+            existing.aliases.push(generatedName);
           }
           continue;
         }
-        const qualityMood = QUALITY_MOOD[suffix] || null;
-        const motion = motionMood(fromChord ? fromChord.rootPc : null, root);
+
+        // Name the notes that were actually assigned, rather than automatically
+        // leading with the formula that generated them. This lets a complete
+        // minor interpretation with its 3rd and 7th (for example Gm13) outrank
+        // a more ambiguous extended-major generator.
+        const analyses = analyzeVoicingOptions(targets.map(target => target.to));
+        const primaryAnalysis = analyses[0];
+        const hasRecognizedAnalysis = primaryAnalysis && !primaryAnalysis.fallback;
+        const primaryRoot = hasRecognizedAnalysis ? primaryAnalysis.rootPc : root;
+        const primarySuffix = hasRecognizedAnalysis ? primaryAnalysis.suffix : suffix;
+        const { name: chordName, aliases } = candidateNaming(generatedName, analyses, names);
+
+        const qualityMood = QUALITY_MOOD[primarySuffix] || null;
+        const motion = motionMood(fromChord ? fromChord.rootPc : null, primaryRoot);
         byNoteSet.set(setKey, {
           key: setKey,
           name: chordName,
-          rootPc: root,
-          rootChanged: fromChord ? root !== fromChord.rootPc : false,
-          aliases: [],
+          rootPc: primaryRoot,
+          suffix: primarySuffix,
+          flats: keyUsesFlats(primaryRoot),
+          rootChanged: fromChord ? primaryRoot !== fromChord.rootPc : false,
+          aliases,
           totalCost: total,
           commonCount: targets.filter(t => t.dist === 0).length,
+          bassMovement: targets[0].to - targets[0].from,
           targets,
           mood: [qualityMood, motion].filter(Boolean).join(" · "),
-          category: SUFFIX_CATEGORY[suffix] || "warm",
+          category: SUFFIX_CATEGORY[primarySuffix] || "warm",
         });
       }
     }
     const out = [...byNoteSet.values()];
-    out.sort((a, b) =>
-      Number(Boolean(b.rootChanged)) - Number(Boolean(a.rootChanged)) ||
-      a.totalCost - b.totalCost ||
-      b.commonCount - a.commonCount
-    );
+    out.sort((a, b) => compareCandidates(a, b, bassOrder));
     return out;
-  }, [currentNotes, key]);
+  }, [currentNotes, key, bassOrder]);
 
   const grouped = useMemo(() => {
     return EMOTION_CATEGORIES.map(cat => ({
@@ -830,9 +687,35 @@ function VoiceLeadingExplorer() {
 
   const [selectedMood, setSelectedMood] = useState("warm");
   const activeGroup = grouped.find(g => g.id === selectedMood) || grouped[0];
+  const candidates = useMemo(
+    () => candidatesForEmotion(results, selectedMood),
+    [results, selectedMood]
+  );
+  const [selectedCandidateIndex, setSelectedCandidateIndex] = useState(0);
+  const selectedCandidate = candidateAt(candidates, selectedCandidateIndex);
+
+  useEffect(() => {
+    setSelectedCandidateIndex(0);
+  }, [committedText, selectedMood, useFlats, bassOrder]);
+  useEffect(() => {
+    setShowNegativeHarmony(false);
+  }, [committedText]);
+
+  function selectMood(mood) {
+    setSelectedMood(mood);
+    setSelectedCandidateIndex(0);
+  }
+
+  function showNextCandidate() {
+    setSelectedCandidateIndex(index => nextCandidateIndex(index, candidates.length));
+  }
+
+  function showPreviousCandidate() {
+    setSelectedCandidateIndex(index => previousCandidateIndex(index));
+  }
 
   function applyResult(r) {
-    const names = r.targets.map(t => midiToName(t.to, key.flats));
+    const names = r.targets.map(t => spellMidiForChord(t.to, r.rootPc, r.suffix));
     const text = names.join(" ");
     setRawText(text);
     setHistory(h => [...h, { text, label: r.name }]);
@@ -1052,12 +935,6 @@ function VoiceLeadingExplorer() {
           border-radius: 2px;
           background: rgba(237,230,214,0.15);
         }
-        .vl-count {
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 11px;
-          color: var(--ink-dim);
-          margin-bottom: 8px;
-        }
         .vl-list {
           display: flex; flex-direction: column; gap: 8px;
         }
@@ -1097,13 +974,6 @@ function VoiceLeadingExplorer() {
           color: var(--ink-dim);
           line-height: 1.4;
         }
-        .vl-mood-btn-count {
-          position: absolute;
-          top: 10px; right: 12px;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 10px;
-          color: var(--ink-dim);
-        }
         .vl-row {
           background: var(--panel);
           border: 1px solid var(--hair);
@@ -1132,27 +1002,14 @@ function VoiceLeadingExplorer() {
           line-height: 1.35;
           opacity: 0.85;
         }
-        .vl-row-tag {
-          font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim);
-          margin-top: 2px;
-        }
         .vl-lanes { flex: 1; display: flex; flex-direction: column; gap: 3px; }
         .vl-lane { display: flex; align-items: center; gap: 8px; }
         .vl-lane-note {
           font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-dim);
           width: 34px; text-align: right;
         }
-        .vl-lane-track {
-          flex: 1; height: 6px; background: rgba(237,230,214,0.06); border-radius: 3px;
-          position: relative; overflow: hidden;
-        }
-        .vl-lane-fill { height: 100%; border-radius: 3px; }
         .vl-lane-to {
           font-family: 'JetBrains Mono', monospace; font-size: 11px; width: 34px;
-        }
-        .vl-row-cost {
-          font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--brass);
-          width: 46px; text-align: right; flex-shrink: 0;
         }
         .vl-row-apply {
           flex-shrink: 0; background: transparent; border: 1px solid var(--hair);
@@ -1160,6 +1017,29 @@ function VoiceLeadingExplorer() {
           padding: 7px 10px; border-radius: 6px; cursor: pointer;
         }
         .vl-row-apply:hover { border-color: var(--brass); color: var(--ink); }
+        .vl-row-apply:disabled { opacity: 0.4; cursor: not-allowed; border-color: var(--hair); color: var(--ink-dim); }
+        .vl-bass-order {
+          flex-shrink: 0;
+          display: inline-flex;
+          flex-direction: column;
+          gap: 2px;
+          color: var(--ink-dim);
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 8px;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+        .vl-bass-order select {
+          background: transparent;
+          border: 1px solid var(--hair);
+          border-radius: 6px;
+          color: var(--ink-dim);
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 10px;
+          padding: 6px 5px;
+          cursor: pointer;
+        }
+        .vl-bass-order select:hover { border-color: var(--brass); color: var(--ink); }
         .vl-play-btn {
           flex-shrink: 0;
           width: 30px; height: 30px;
@@ -1304,11 +1184,11 @@ function VoiceLeadingExplorer() {
       `}</style>
 
       <div className="vl-wrap">
-        <div className="vl-eyebrow">Voicing → Voicing</div>
-        <h1 className="vl-title">Voice-Leading Explorer</h1>
+        <div className="vl-eyebrow">Harmony → Discovery</div>
+        <h1 className="vl-title">Harmony Discovery Explorer</h1>
         <p className="vl-sub">
-          Enter a voicing. Explore new-root chords first, ordered by total semitone
-          travel across all your notes — with the emotional character of each move.
+          Enter a voicing. Follow the bass upward or downward, hear where each voice
+          can move, and discover new colors and interpretations for every harmony.
         </p>
 
         <div className="vl-panel vl-form">
@@ -1326,20 +1206,8 @@ function VoiceLeadingExplorer() {
             <div className="vl-input-help" id="notes-help">
               <div>Examples:</div>
               <div>• Exact Voicing: A3 C4 E4</div>
-              <div>• Default Middle Voicing: A C E</div>
+              <div>• Default Voicing — Third Range: A C E</div>
             </div>
-          </div>
-          <div className="vl-field">
-            <label className="vl-label" htmlFor="spelling">Spelling</label>
-            <select
-              id="spelling"
-              className="vl-select"
-              value={useFlats ? "flats" : "sharps"}
-              onChange={e => setUseFlats(e.target.value === "flats")}
-            >
-              <option value="sharps">Sharps (♯)</option>
-              <option value="flats">Flats (♭)</option>
-            </select>
           </div>
           <button className="vl-btn" type="button" onClick={handleSubmit}>Analyze</button>
           {error && <div className="vl-error" style={{ width: "100%" }}>{error}</div>}
@@ -1528,7 +1396,7 @@ function VoiceLeadingExplorer() {
               </div>
               {showNegativeHarmony && (
                 <div className="vl-negative-shadow">
-                  <div className="vl-negative-kicker">Shadow voicing · pivot {midiToName(currentNotes[0], key.flats)}</div>
+                  <div className="vl-negative-kicker">Shadow voicing</div>
                   <div className="vl-current-row">
                     <div className="vl-current-name">
                       {negativeHarmonyLabel(negativeNotes)}
@@ -1569,22 +1437,19 @@ function VoiceLeadingExplorer() {
                   key={g.id}
                   type="button"
                   className={"vl-mood-btn" + (activeGroup && g.id === activeGroup.id ? " active" : "")}
-                  onClick={() => setSelectedMood(g.id)}
+                  onClick={() => selectMood(g.id)}
                 >
                   <span className="vl-mood-btn-label">{g.label}</span>
                   <span className="vl-mood-btn-blurb">{g.blurb}</span>
-                  <span className="vl-mood-btn-count">{g.items.length}</span>
                 </button>
               ))}
             </div>
 
-            {activeGroup && (
-              <>
-                <div className="vl-count">
-                  {activeGroup.items.length} voicings · new roots, then closest moves
-                </div>
+            {selectedCandidate && (() => {
+              const r = selectedCandidate;
+              const selectedNotes = r.targets.map(t => t.to);
+              return (
                 <div className="vl-list">
-                  {activeGroup.items.map(r => (
                     <div className="vl-row" key={r.key}>
                       <div className="vl-row-name">
                         <div className="vl-row-chord">
@@ -1593,36 +1458,26 @@ function VoiceLeadingExplorer() {
                             <span className="vl-row-alias"> / {r.aliases.join(" / ")}</span>
                           )}
                         </div>
-                        <div className="vl-row-tag">
-                          {r.commonCount} common tone{r.commonCount === 1 ? "" : "s"}
-                        </div>
                         {r.mood && <div className="vl-row-mood">{r.mood}</div>}
                       </div>
                       <div className="vl-lanes">
                         {r.targets.map((t, i) => {
-                          const pct = Math.min(t.dist / 7, 1) * 100;
                           const color = movementColor(t.dist);
                           return (
                             <div className="vl-lane" key={i}>
                               <span className="vl-lane-note">{midiToName(t.from, key.flats)}</span>
-                              <div className="vl-lane-track">
-                                <div
-                                  className="vl-lane-fill"
-                                  style={{ width: pct + "%", background: color }}
-                                />
-                              </div>
+                              <span aria-hidden="true" style={{ color }}>→</span>
                               <span className="vl-lane-to" style={{ color }}>
-                                {t.dist === 0 ? "—" : midiToName(t.to, key.flats)}
+                                {spellMidiForChord(t.to, r.rootPc, r.suffix)}
                               </span>
                             </div>
                           );
                         })}
                       </div>
-                      <div className="vl-row-cost">{r.totalCost}st</div>
                       <div className="vl-play-group">
                         <button
                           className="vl-play-btn"
-                          onClick={() => playTransition(currentNotes, r.targets.map(t => t.to), r.key)}
+                          onClick={() => playTransition(currentNotes, selectedNotes, r.key)}
                           aria-label={"Play move to " + r.name}
                           type="button"
                         >
@@ -1630,36 +1485,48 @@ function VoiceLeadingExplorer() {
                         </button>
                         <span className="vl-play-label">Tap</span>
                       </div>
+                      <label className="vl-bass-order">
+                        <span>Bass</span>
+                        <select
+                          aria-label="Bass order"
+                          value={bassOrder}
+                          onChange={event => setBassOrder(event.target.value)}
+                        >
+                          <option value="ascending">Ascending</option>
+                          <option value="descending">Descending</option>
+                        </select>
+                      </label>
+                      <button
+                        className="vl-row-apply"
+                        type="button"
+                        onClick={showPreviousCandidate}
+                        disabled={selectedCandidateIndex === 0}
+                        aria-label="Show the previous voicing"
+                      >
+                        Back
+                      </button>
+                      <button
+                        className="vl-row-apply"
+                        type="button"
+                        onClick={showNextCandidate}
+                        disabled={selectedCandidateIndex >= candidates.length - 1}
+                        aria-label="Show the next closest voicing"
+                      >
+                        Next
+                      </button>
                       <button className="vl-row-apply" onClick={() => applyResult(r)}>
-                        Move here →
+                        Add it →
                       </button>
                     </div>
-                  ))}
-                  {activeGroup.items.length === 0 && (
-                    <div className="vl-row" style={{ color: "var(--ink-dim)" }}>
-                      No voicings in this mood from here.
+                    <div className="vl-piano-wrap">
+                      <PianoKeys midis={selectedNotes} flats={r.flats} />
                     </div>
-                  )}
                 </div>
-              </>
-            )}
-
-            <div className="vl-legend">
-              <span><span className="vl-dot" style={{ background: "var(--sage)" }} />held (0 st)</span>
-              <span><span className="vl-dot" style={{ background: "var(--brass)" }} />step (1–2 st)</span>
-              <span><span className="vl-dot" style={{ background: "var(--rust)" }} />leap (3+ st)</span>
-            </div>
+              );
+            })()}
           </>
         )}
       </div>
     </div>
   );
 }
-
-
-const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(React.createElement(VoiceLeadingExplorer));
-
-</script>
-</body>
-</html>

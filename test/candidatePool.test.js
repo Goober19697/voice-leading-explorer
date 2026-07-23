@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  candidateNaming,
   candidateAt,
   candidatesForEmotion,
   compareCandidates,
@@ -9,6 +10,8 @@ import {
   nextCandidateIndex,
   previousCandidateIndex,
 } from "../src/candidatePool.js";
+
+const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
 const candidates = [
   { key: "60,64,67", category: "warm", totalCost: 2, commonCount: 2 },
@@ -45,6 +48,27 @@ test("candidate pools remove duplicate physical voicings", () => {
   assert.deepEqual(distinctCandidates([...candidates, duplicate]), candidates);
 });
 
+test("a generated chord name leads and its interval fallback remains an alias", () => {
+  const analyses = [{
+    rootPc: 7,
+    suffix: "(11,13,♭7)",
+    rootless: false,
+    fallback: true,
+  }];
+  assert.deepEqual(candidateNaming("Gm13", analyses, noteNames), {
+    name: "Gm13",
+    aliases: ["G(11,13,♭7)"],
+  });
+});
+
+test("a recognized analysis can replace an ambiguous generated name", () => {
+  const analyses = [{ rootPc: 7, suffix: "m13", rootless: false }];
+  assert.deepEqual(candidateNaming("A#maj13♯11", analyses, noteNames), {
+    name: "Gm13",
+    aliases: ["A#maj13♯11"],
+  });
+});
+
 test("emotion selection retains only that category when matches exist", () => {
   assert.deepEqual(candidatesForEmotion(candidates, "warm"), candidates.slice(0, 2));
 });
@@ -60,7 +84,32 @@ test("voice-leading distance remains the primary ordering key", () => {
 });
 
 test("a candidate on a new root is offered before a same-root alternative", () => {
-  const sameRoot = { key: "same", totalCost: 1, commonCount: 4, rootChanged: false };
-  const newRoot = { key: "new", totalCost: 4, commonCount: 2, rootChanged: true };
+  const sameRoot = {
+    key: "same", totalCost: 1, commonCount: 4, rootChanged: false, bassMovement: 0,
+  };
+  const newRoot = {
+    key: "new", totalCost: 4, commonCount: 2, rootChanged: true, bassMovement: 4,
+  };
   assert.ok(compareCandidates(newRoot, sameRoot) < 0);
+});
+
+test("moving basses precede stationary basses and follow the selected direction", () => {
+  const downTwo = {
+    key: "down-two", totalCost: 4, commonCount: 2, rootChanged: true, bassMovement: -2,
+  };
+  const upOne = {
+    key: "up-one", totalCost: 4, commonCount: 2, rootChanged: true, bassMovement: 1,
+  };
+  const stationary = {
+    key: "stationary", totalCost: 1, commonCount: 4, rootChanged: true, bassMovement: 0,
+  };
+
+  assert.deepEqual(
+    [stationary, downTwo, upOne].sort((a, b) => compareCandidates(a, b, "ascending")),
+    [upOne, downTwo, stationary]
+  );
+  assert.deepEqual(
+    [stationary, downTwo, upOne].sort((a, b) => compareCandidates(a, b, "descending")),
+    [downTwo, upOne, stationary]
+  );
 });

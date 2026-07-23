@@ -85,11 +85,41 @@ test("extended eleventh and thirteenth voicings are recognized", () => {
   assert.ok(QUALITIES.some(([suffix]) => suffix === "13"));
 });
 
-test("the first entered note determines the primary name and other roots remain optional", () => {
-  assert.deepEqual(chordLabels(parseVoicing("C E G A").midis), ["C6", "Am7"]);
+test("a played third and seventh outrank a sixth-chord reinterpretation", () => {
+  assert.deepEqual(chordLabels(parseVoicing("C E G A").midis), ["Am7", "C6"]);
   assert.deepEqual(chordLabels(parseVoicing("A C E G").midis), ["Am7", "C6"]);
-  assert.equal(label("C E G A"), "C6");
+  assert.equal(label("C E G A"), "Am7");
   assert.equal(label("A C E G"), "Am7");
+});
+
+test("Fm7 outranks its enharmonic Ab6 reinterpretation", () => {
+  const notes = parseVoicing("G#3 D#4 F4 G#4 C5").midis;
+  assert.equal(chordLabel(notes), "Fm7");
+  assert.deepEqual(chordLabels(notes), ["Fm7", "G#6"]);
+});
+
+test("Fm11 with an omitted ninth outranks its Ab6/9 reinterpretation", () => {
+  const notes = parseVoicing("Bb3 Eb4 F4 Ab4 C5").midis;
+  assert.equal(chordLabel(notes), "Fm11");
+  assert.deepEqual(chordLabels(notes), ["Fm11", "G#6/9"]);
+});
+
+test("a complete Gb suspended seventh outranks an incomplete E6/9 analysis", () => {
+  const notes = parseVoicing("F#3 E4 F#4 G#4 C#5").midis;
+  assert.equal(chordLabel(notes), "F#7sus");
+  assert.deepEqual(chordLabels(notes), ["F#7sus", "E6/9"]);
+});
+
+test("a conventional chord name takes priority over an interval-list fallback", () => {
+  const notes = parseVoicing("A3 E4 F4 G4 C5").midis;
+  assert.equal(chordLabel(notes), "Fmaj9");
+  assert.deepEqual(chordLabels(notes), ["Fmaj9"]);
+});
+
+test("a minor thirteenth with its third and seventh outranks an ambiguous extended-major name", () => {
+  const notes = parseVoicing("A#3 E4 F4 G4 C5").midis;
+  assert.equal(chordLabel(notes), "Gm13");
+  assert.deepEqual(chordLabels(notes), ["Gm13"]);
 });
 
 test("a root-first minor-thirteenth voicing may omit the ninth", () => {
@@ -98,11 +128,11 @@ test("a root-first minor-thirteenth voicing may omit the ninth", () => {
   assert.equal(chordLabels(notes)[0], "Bm13");
 });
 
-test("a C-first 6/9 sharp-eleven voicing is not named from A", () => {
+test("a minor thirteenth with a played third and seventh outranks 6/9 sharp-eleven", () => {
   const notes = parseVoicing("C E G D F# A").midis;
-  assert.equal(chordLabel(notes), "C6/9♯11");
-  assert.equal(chordLabels(notes)[0], "C6/9♯11");
-  assert.ok(chordLabels(notes).includes("Am13"));
+  assert.equal(chordLabel(notes), "Am13");
+  assert.equal(chordLabels(notes)[0], "Am13");
+  assert.ok(chordLabels(notes).includes("C6/9♯11"));
 });
 
 test("a complete C major-thirteen sharp-eleven is recognized from C", () => {
@@ -111,8 +141,10 @@ test("a complete C major-thirteen sharp-eleven is recognized from C", () => {
   assert.equal(chordLabels(notes)[0], "Cmaj13♯11");
 });
 
-test("an unregistered collection still receives a first-note-rooted analysis", () => {
-  const labels = chordLabels(parseVoicing("C Db E G").midis);
+test("an interval-list analysis is used only when no conventional name exists", () => {
+  assert.equal(label("C Db E G"), "C#m(maj7)b5");
+
+  const labels = chordLabels(parseVoicing("C Db D G").midis);
   assert.match(labels[0], /^C\(/);
   assert.notEqual(labels[0], "Custom voicing");
 });

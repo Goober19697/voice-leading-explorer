@@ -1,22 +1,22 @@
-# Voice-Leading Explorer
+# Harmony Discovery Explorer
 
-> **Discover nearby harmonic possibilities through deterministic voice
-> leading.**
+> **Hear where a voicing can go, uncover alternate harmonic identities,
+> and build progressions through guided discovery.**
 
 ![React](https://img.shields.io/badge/React-18.2-blue)
 ![Vite](https://img.shields.io/badge/Vite-Latest-purple)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-yellow)
 ![Tone.js](https://img.shields.io/badge/Tone.js-Audio-green)
 
-> **A React application that analyzes a chord voicing and discovers
-> harmonically related destinations by minimizing total voice
-> movement.**
+> **A React application that turns an entered voicing into an explorable
+> neighborhood of chord colors, bass motions, emotional characters, and
+> alternate analyses.**
 
 ## Live Demo
 
-[Open Voice-Leading Explorer](http://3.93.162.237)
+[Open Harmony Discovery Explorer](http://3.93.162.237)
 
-![Voice-Leading Explorer Interface](docs/hero1.png)
+![Harmony Discovery Explorer Interface](docs/hero2.png)
 
 ------------------------------------------------------------------------
 
@@ -27,14 +27,15 @@ substitutions.
 
 I wanted to build something different.
 
-Voice-Leading Explorer starts with the exact voicing a musician is
+Harmony Discovery Explorer starts with the exact voicing a musician is
 hearing and asks a different question:
 
-> **"What is the closest harmonic destination from here?"**
+> **"What else can this harmony become, and how does each possibility sound?"**
 
-Instead of prescribing harmony, the application explores it through
-deterministic voice-leading algorithms that minimize total semitone
-movement while preserving realistic musical behavior.
+Instead of prescribing a single theoretically correct path, the application
+keeps useful ambiguity visible. It combines bass-direction exploration,
+efficient upper-voice movement, chord recognition, interval analysis, and
+real-time playback so the ear can participate in the decision.
 
 Beyond solving a musical problem, this project became an opportunity to
 design algorithms, organize complex theory into maintainable software
@@ -44,11 +45,14 @@ modules, and build a polished React application from the ground up.
 
 # Features
 
-## Deterministic Voice-Leading Engine
+## Bass-Guided Harmony Discovery
 
 -   Analyze any chord voicing
 -   Generate every supported destination chord
--   Prioritize new-root candidates, then rank by minimum semitone movement
+-   Prioritize new-root candidates over same-root recolorings
+-   Browse candidates by ascending or descending bass movement
+-   Place stationary-bass choices after moving-bass choices
+-   Use total semitone travel to resolve otherwise equal candidates
 -   Distinct-note assignment using constrained backtracking
 -   Enharmonic deduplication with alternate analyses preserved
 
@@ -62,11 +66,24 @@ Supports:
 -   Suspended chords
 -   Altered dominants
 -   Modern jazz chord qualities
+-   Practical rootless and omitted-tone extended voicings
+-   Suspended dominant colors such as 7sus
 -   Interval-formula fallback labels for unregistered note sets
+-   Multiple valid names shown together when a voicing is harmonically ambiguous
+-   Naming priority for defining 3rds and 7ths, then complete chord formulas
+
+## Automatic Theoretical Spelling
+
+-   Correct novice enharmonic input automatically (`D G♭ A` → `D F♯ A`)
+-   Normalize mixed sharp/flat input without changing pitch, order, or octave
+-   Spell generated notes intervalically from the selected chord root
+-   Support theoretical spellings such as F♭ and double accidentals
+-   Use one conventional key per pitch class: C, G, D, A, E, B, G♭, D♭,
+    A♭, E♭, B♭, and F
 
 ## Negative Harmony
 
--   Reflect any voicing around its first note as the fixed pivot
+-   Reflect any voicing around its first note
 -   Show the reflected shadow without replacing the current chord
 -   Analyze inversions from their harmonic root rather than their lowest note
 -   Play the shadow independently
@@ -76,7 +93,7 @@ Supports:
 
 -   Display current, generated, inspected, and shadow voicings on a piano
 -   Mark the first/reference key with a subtle note-and-octave label
--   Respect the selected enharmonic spelling on keyboard markers
+-   Use the analyzed chord's key and interval structure for note labels
 
 ## Emotion-Based Discovery
 
@@ -143,7 +160,7 @@ Note Parsing
 Candidate Generation
       │
       ▼
-Voice-Leading Solver
+Bass-Motion & Assignment Solver
       │
       ▼
 Chord Recognition
@@ -166,10 +183,10 @@ Playback Engine
 # Project Structure
 
 ``` text
-voice-leading-explorer/
+harmony-discovery-explorer/
 
 src/
-├── VoiceLeadingExplorer.jsx
+├── HarmonyDiscoveryExplorer.jsx
 ├── candidatePool.js
 ├── chordPatterns.js
 ├── negativeHarmony.js
@@ -177,7 +194,7 @@ src/
 └── main.jsx
 
 standalone/
-└── voice-leading-explorer.html
+└── HarmonyDiscoveryExplorer.html
 ```
 
 ------------------------------------------------------------------------
@@ -186,13 +203,18 @@ standalone/
 
 1.  Parse the notes entered by the user.
 2.  Generate every supported root and chord quality.
-3.  Compute the minimum-total-movement mapping between the current
-    voicing and each candidate.
+3.  Compute a distinct-note mapping between the current voicing and each
+    candidate.
 4.  Guarantee unique destination notes with a constrained backtracking
     search.
 5.  Remove duplicate note sets while preserving alternate chord names.
-6.  Put new-root destinations first, then rank each group by total movement.
-7.  Group the final results by emotional character.
+6.  Rank names by harmonic evidence: defining 3rd and 7th, chord
+    completeness, and played root/bass evidence.
+7.  Put new-root destinations first and order them by the selected ascending
+    or descending bass direction.
+8.  Use total movement as a later tie-breaker.
+9.  Respell every destination from its selected chord root and key.
+10. Group the final results by emotional character.
 
 ## How Negative Harmony Works
 
@@ -203,8 +225,7 @@ standalone/
     and playback.
 4.  Analyze the complete pitch set to find its harmonic root, including
     supported interpretations whose root is not played.
-5.  Use conventional enharmonic spelling for the resulting chord and notes,
-    independently of the main Sharps/Flats selector.
+5.  Use conventional enharmonic spelling for the resulting chord and notes.
 6.  If no registered chord matches, display the intervals measured from the
     shadow's lowest note instead of an unnamed result.
 7.  Let the user audition the shadow or add it to the progression trail.
