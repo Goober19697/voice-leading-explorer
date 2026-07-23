@@ -400,6 +400,15 @@ function PianoKeys({ midis }) {
     }
   }
   const width = wIndex * WK_W;
+  const referenceMidi = midis[0];
+  const referenceWhite = whites.find(k => k.m === referenceMidi);
+  const referenceBlack = blacks.find(k => k.m === referenceMidi);
+  const referenceKey = referenceWhite || referenceBlack;
+  const referenceLabel = toneName(referenceMidi);
+  const referenceX = referenceKey
+    ? referenceKey.x + (referenceWhite ? (WK_W - 1) / 2 : BK_W / 2)
+    : 0;
+  const referenceY = referenceWhite ? WK_H - 7 : BK_H - 6;
 
   return (
     <svg
@@ -428,6 +437,22 @@ function PianoKeys({ midis }) {
           stroke="#1B1D2A" strokeWidth="1"
         />
       ))}
+      {referenceKey && (
+        <text
+          x={referenceX}
+          y={referenceY}
+          textAnchor="middle"
+          fontFamily="'JetBrains Mono', monospace"
+          fontSize={referenceLabel.length > 2 ? 6.5 : 7.5}
+          fontWeight="600"
+          fill="#1B1D2A"
+          opacity="0.72"
+          pointerEvents="none"
+          aria-hidden="true"
+        >
+          {referenceLabel}
+        </text>
+      )}
     </svg>
   );
 }
