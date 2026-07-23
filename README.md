@@ -16,7 +16,7 @@
 
 [Open Harmony Discovery Explorer](http://3.93.162.237)
 
-![Harmony Discovery Explorer Interface](docs/hero2.png)
+![Harmony Discovery Explorer Interface](docs/hero3.png)
 
 ------------------------------------------------------------------------
 

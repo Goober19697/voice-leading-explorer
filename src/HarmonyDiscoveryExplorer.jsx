@@ -1187,8 +1187,8 @@ export default function HarmonyDiscoveryExplorer() {
         <div className="vl-eyebrow">Harmony → Discovery</div>
         <h1 className="vl-title">Harmony Discovery Explorer</h1>
         <p className="vl-sub">
-          Enter a voicing. Follow the bass upward or downward, hear where each voice
-          can move, and discover new colors and interpretations for every harmony.
+          Enter a voicing, hear where each voicing can move, and discover new colors
+          and interpretations for every harmony.
         </p>
 
         <div className="vl-panel vl-form">
