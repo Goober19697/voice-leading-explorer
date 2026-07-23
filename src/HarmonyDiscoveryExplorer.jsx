@@ -755,8 +755,11 @@ export default function HarmonyDiscoveryExplorer() {
           min-height: 100vh;
           padding: 32px 20px 60px;
           box-sizing: border-box;
+          overflow-x: hidden;
+          -webkit-text-size-adjust: 100%;
         }
-        .vl-wrap { max-width: 760px; margin: 0 auto; }
+        .vl-root *, .vl-root *::before, .vl-root *::after { box-sizing: border-box; }
+        .vl-wrap { width: 100%; max-width: 760px; margin: 0 auto; }
         .vl-eyebrow {
           font-family: 'JetBrains Mono', monospace;
           font-size: 11px;
@@ -1177,9 +1180,57 @@ export default function HarmonyDiscoveryExplorer() {
         }
         .vl-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
         @media (max-width: 560px) {
-          .vl-row { flex-wrap: wrap; }
-          .vl-row-name { width: auto; }
-          .vl-lanes { width: 100%; order: 3; }
+          .vl-root {
+            padding: max(20px, env(safe-area-inset-top))
+              max(12px, env(safe-area-inset-right))
+              max(40px, env(safe-area-inset-bottom))
+              max(12px, env(safe-area-inset-left));
+          }
+          .vl-title { font-size: clamp(27px, 9vw, 34px); line-height: 1.08; }
+          .vl-sub { margin-bottom: 22px; }
+          .vl-panel { padding: 14px; }
+          .vl-form { display: grid; grid-template-columns: minmax(0, 1fr); }
+          .vl-form .vl-field, .vl-input { width: 100%; min-width: 0; }
+          .vl-input, .vl-select { font-size: 16px; }
+          .vl-form .vl-btn { width: 100%; }
+          .vl-current-row {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 10px;
+          }
+          .vl-current-row > div { min-width: 0; max-width: 100%; }
+          .vl-current-row > div:last-child {
+            width: 100%;
+            flex-wrap: wrap;
+            justify-content: flex-start;
+          }
+          .vl-current-notes { overflow-wrap: anywhere; }
+          .vl-piano-wrap { padding: 6px; }
+          .vl-mood-picker { grid-template-columns: 1fr; }
+          .vl-row {
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 12px;
+          }
+          .vl-row-name { width: 100%; }
+          .vl-lanes { flex: 1 0 100%; width: 100%; order: 2; }
+          .vl-mode-toggle {
+            max-width: 100%;
+            overflow-x: auto;
+            border-radius: 8px;
+          }
+          .vl-mode-btn { flex: 0 0 auto; }
+          .vl-inspect-head, .vl-inspect-actions {
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 8px;
+          }
+          .vl-legend { flex-wrap: wrap; gap: 8px 16px; }
+        }
+        @media (max-width: 360px) {
+          .vl-volume-slider { width: 96px; }
+          .vl-negative-btn { white-space: normal; }
         }
       `}</style>
 
