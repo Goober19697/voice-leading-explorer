@@ -45,7 +45,7 @@ export const CHORD_PATTERNS = [
 // Candidate generation and recognition deliberately share this registry.
 export const QUALITIES = CHORD_PATTERNS.map(({ suffix, intervals }) => [suffix, intervals]);
 
-export function analyzeVoicingOptions(midis) {
+export function analyzeVoicingOptions(midis, { includeUnplayedRoots = false } = {}) {
   if (!midis || midis.length < 2) return [];
   const pcs = new Set(midis.map(midi => ((midi % 12) + 12) % 12));
   const bassPc = ((midis[0] % 12) + 12) % 12;
@@ -81,6 +81,8 @@ export function analyzeVoicingOptions(midis) {
     const bBass = b.rootPc === bassPc ? 0 : 1;
     return aBass - bBass || a.score[0] - b.score[0] || a.score[1] - b.score[1];
   });
+  if (includeUnplayedRoots) return options;
+
   const enteredRootOptions = options.filter(option => pcs.has(option.rootPc));
   if (enteredRootOptions.some(option => option.rootPc === bassPc)) return enteredRootOptions;
 

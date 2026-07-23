@@ -194,7 +194,7 @@ function movementColor(dist) {
 // - exact matches first
 // - tolerates an omitted 5th (shell voicings) and/or omitted root (rootless jazz voicings)
 // - prefers interpretations whose root is the bass note (A C E G → Am7, not C6)
-function analyzeVoicingOptions(midis) {
+function analyzeVoicingOptions(midis, { includeUnplayedRoots = false } = {}) {
   if (!midis || midis.length < 2) return [];
   const pcs = new Set(midis.map(m => ((m % 12) + 12) % 12));
   const bassPc = ((midis[0] % 12) + 12) % 12; // parser preserves the entered bass reference
@@ -231,6 +231,8 @@ function analyzeVoicingOptions(midis) {
     const bBass = b.rootPc === bassPc ? 0 : 1;
     return aBass - bBass || a.score[0] - b.score[0] || a.score[1] - b.score[1];
   });
+  if (includeUnplayedRoots) return options;
+
   const enteredRootOptions = options.filter(option => pcs.has(option.rootPc));
   if (enteredRootOptions.some(option => option.rootPc === bassPc)) return enteredRootOptions;
   const intervalNames = ["", "♭9", "9", "♭3", "3", "11", "♯11", "5", "♭13", "13", "♭7", "maj7"];
@@ -371,13 +373,48 @@ function motionMood(fromRootPc, toRootPc) {
   }
 }
 
+function negativeHarmony(midis) {
+  if (!midis || midis.length === 0) return [];
+  const pivot = midis[0];
+  return midis
+    .map(midi => pivot - (midi - pivot))
+    .sort((a, b) => a - b);
+}
+
+const CONVENTIONAL_ROOT_NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+const FLAT_ROOTS = new Set([3, 8, 10]);
+
+function negativeHarmonyAnalysis(midis) {
+  const recognized = analyzeVoicingOptions(midis, { includeUnplayedRoots: true })
+    .filter(option => !option.fallback)
+    .sort((a, b) =>
+      Number(a.rootless) - Number(b.rootless) ||
+      (a.rootless && b.rootless
+        ? b.score[1] - a.score[1]
+        : a.score[0] - b.score[0] || a.score[1] - b.score[1])
+    )[0];
+  return recognized || analyzeVoicingOptions(midis)[0] || null;
+}
+
+function negativeHarmonyLabel(midis) {
+  const recognized = negativeHarmonyAnalysis(midis);
+  if (!recognized) return "Negative harmony";
+  return CONVENTIONAL_ROOT_NAMES[recognized.rootPc] + recognized.suffix +
+    (recognized.rootless ? " (rootless)" : "");
+}
+
+function negativeHarmonyUsesFlats(midis) {
+  const recognized = negativeHarmonyAnalysis(midis);
+  return recognized ? FLAT_ROOTS.has(recognized.rootPc) : false;
+}
+
 // ---------- piano keyboard visual ----------
 
 const WHITE_PCS = [0, 2, 4, 5, 7, 9, 11];
 // black key horizontal offset (in white-key units) within an octave, keyed by pc
 const BLACK_OFFSETS = { 1: 1, 3: 2, 6: 4, 8: 5, 10: 6 };
 
-function PianoKeys({ midis }) {
+function PianoKeys({ midis, flats = false }) {
   if (!midis || midis.length === 0) return null;
   const pressed = new Set(midis);
   // range: full octaves spanning the voicing, minimum two octaves for looks
@@ -404,7 +441,7 @@ function PianoKeys({ midis }) {
   const referenceWhite = whites.find(k => k.m === referenceMidi);
   const referenceBlack = blacks.find(k => k.m === referenceMidi);
   const referenceKey = referenceWhite || referenceBlack;
-  const referenceLabel = toneName(referenceMidi);
+  const referenceLabel = midiToName(referenceMidi, flats);
   const referenceX = referenceKey
     ? referenceKey.x + (referenceWhite ? (WK_W - 1) / 2 : BK_W / 2)
     : 0;
@@ -466,6 +503,7 @@ function VoiceLeadingExplorer() {
   const [error, setError] = useState(null);
   const [playingKey, setPlayingKey] = useState(null);
   const [audioError, setAudioError] = useState(null);
+  const [showNegativeHarmony, setShowNegativeHarmony] = useState(false);
   const [volume, setVolume] = useState(100); // 0-100
   const synthRef = useRef(null);
   const committedText = history[history.length - 1].text;
@@ -596,7 +634,12 @@ function VoiceLeadingExplorer() {
 
   const parsed = useMemo(() => parseVoicing(committedText), [committedText]);
   const currentNotes = parsed && parsed.midis.length ? parsed.midis : null;
+  const negativeNotes = useMemo(() => negativeHarmony(currentNotes), [currentNotes]);
+  const negativeUsesFlats = useMemo(() => negativeHarmonyUsesFlats(negativeNotes), [negativeNotes]);
   const key = { flats: useFlats };
+  useEffect(() => {
+    setShowNegativeHarmony(false);
+  }, [committedText]);
 
   // --- progression (trail) playback ---
   const [trailPlayingIdx, setTrailPlayingIdx] = useState(null); // which chip is sounding
@@ -796,6 +839,18 @@ function VoiceLeadingExplorer() {
     setError(null);
   }
 
+  function addNegativeHarmony() {
+    const text = negativeNotes
+      .map(midi => midiToName(midi, negativeUsesFlats))
+      .join(" ");
+    setRawText(text);
+    setHistory(historyEntries => [
+      ...historyEntries,
+      { text, label: negativeHarmonyLabel(negativeNotes) },
+    ]);
+    setError(null);
+  }
+
   return (
     <div className="vl-root">
       <style>{`
@@ -912,6 +967,26 @@ function VoiceLeadingExplorer() {
         .vl-current-aliases { margin-top: 3px; color: var(--ink-dim); font-size: 12px; }
         .vl-current-notes {
           font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--ink-dim);
+        }
+        .vl-negative-btn {
+          border: 1px solid var(--hair); border-radius: 999px;
+          background: transparent; color: var(--ink-dim);
+          padding: 6px 10px; cursor: pointer;
+          font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+          transition: border-color 0.15s, color 0.15s, background 0.15s;
+        }
+        .vl-negative-btn:hover, .vl-negative-btn.active {
+          border-color: var(--brass); color: var(--ink);
+          background: rgba(201,138,58,0.08);
+        }
+        .vl-negative-shadow {
+          margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hair);
+        }
+        .vl-negative-kicker {
+          margin-bottom: 4px; color: var(--brass);
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 9px; font-weight: 600; letter-spacing: 0.14em;
+          text-transform: uppercase;
         }
         .vl-piano-wrap {
           margin-top: 12px;
@@ -1376,7 +1451,7 @@ function VoiceLeadingExplorer() {
                 ))}
               </div>
               <div className="vl-piano-wrap">
-                <PianoKeys midis={notes} />
+                <PianoKeys midis={notes} flats={key.flats} />
               </div>
               <div className="vl-inspect-actions">
                 <div className="vl-play-group">
@@ -1428,6 +1503,14 @@ function VoiceLeadingExplorer() {
                   <span className="vl-current-notes">
                     {currentNotes.map(m => midiToName(m, key.flats)).join(" · ")}
                   </span>
+                  <button
+                    type="button"
+                    className={"vl-negative-btn" + (showNegativeHarmony ? " active" : "")}
+                    onClick={() => setShowNegativeHarmony(show => !show)}
+                    aria-expanded={showNegativeHarmony}
+                  >
+                    Show Negative Harmony
+                  </button>
                   <div className="vl-play-group">
                     <button
                       className="vl-play-btn"
@@ -1441,8 +1524,43 @@ function VoiceLeadingExplorer() {
                 </div>
               </div>
               <div className="vl-piano-wrap">
-                <PianoKeys midis={currentNotes} />
+                <PianoKeys midis={currentNotes} flats={key.flats} />
               </div>
+              {showNegativeHarmony && (
+                <div className="vl-negative-shadow">
+                  <div className="vl-negative-kicker">Shadow voicing · pivot {midiToName(currentNotes[0], key.flats)}</div>
+                  <div className="vl-current-row">
+                    <div className="vl-current-name">
+                      {negativeHarmonyLabel(negativeNotes)}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span className="vl-current-notes">
+                        {negativeNotes.map(m => midiToName(m, negativeUsesFlats)).join(" · ")}
+                      </span>
+                      <div className="vl-play-group">
+                        <button
+                          className="vl-play-btn"
+                          onClick={() => playChord(negativeNotes, "negative")}
+                          aria-label="Play negative harmony voicing"
+                          type="button"
+                        >
+                          {playingKey === "negative" ? "■" : "▶"}
+                        </button>
+                      </div>
+                      <button
+                        className="vl-row-apply"
+                        type="button"
+                        onClick={addNegativeHarmony}
+                      >
+                        Add it →
+                      </button>
+                    </div>
+                  </div>
+                  <div className="vl-piano-wrap">
+                    <PianoKeys midis={negativeNotes} flats={negativeUsesFlats} />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="vl-mood-picker">

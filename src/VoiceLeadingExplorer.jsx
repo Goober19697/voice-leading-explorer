@@ -2,6 +2,11 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import * as Tone from "tone";
 import { parseVoicing } from "./noteParsing.js";
 import {
+  negativeHarmony,
+  negativeHarmonyLabel,
+  negativeHarmonyUsesFlats,
+} from "./negativeHarmony.js";
+import {
   candidateAt,
   candidatesForEmotion,
   compareCandidates,
@@ -256,7 +261,7 @@ const WHITE_PCS = [0, 2, 4, 5, 7, 9, 11];
 // black key horizontal offset (in white-key units) within an octave, keyed by pc
 const BLACK_OFFSETS = { 1: 1, 3: 2, 6: 4, 8: 5, 10: 6 };
 
-function PianoKeys({ midis }) {
+function PianoKeys({ midis, flats = false }) {
   if (!midis || midis.length === 0) return null;
   const pressed = new Set(midis);
   // range: full octaves spanning the voicing, minimum two octaves for looks
@@ -283,7 +288,7 @@ function PianoKeys({ midis }) {
   const referenceWhite = whites.find(k => k.m === referenceMidi);
   const referenceBlack = blacks.find(k => k.m === referenceMidi);
   const referenceKey = referenceWhite || referenceBlack;
-  const referenceLabel = toneName(referenceMidi);
+  const referenceLabel = midiToName(referenceMidi, flats);
   const referenceX = referenceKey
     ? referenceKey.x + (referenceWhite ? (WK_W - 1) / 2 : BK_W / 2)
     : 0;
@@ -345,6 +350,7 @@ export default function VoiceLeadingExplorer() {
   const [error, setError] = useState(null);
   const [playingKey, setPlayingKey] = useState(null);
   const [audioError, setAudioError] = useState(null);
+  const [showNegativeHarmony, setShowNegativeHarmony] = useState(false);
   const [volume, setVolume] = useState(100); // 0-100
   const synthRef = useRef(null);
   const committedText = history[history.length - 1].text;
@@ -475,6 +481,8 @@ export default function VoiceLeadingExplorer() {
 
   const parsed = useMemo(() => parseVoicing(committedText), [committedText]);
   const currentNotes = parsed && parsed.midis.length ? parsed.midis : null;
+  const negativeNotes = useMemo(() => negativeHarmony(currentNotes), [currentNotes]);
+  const negativeUsesFlats = useMemo(() => negativeHarmonyUsesFlats(negativeNotes), [negativeNotes]);
   const key = useMemo(() => ({ flats: useFlats }), [useFlats]);
 
   // --- progression (trail) playback ---
@@ -672,6 +680,9 @@ export default function VoiceLeadingExplorer() {
   useEffect(() => {
     setSelectedCandidateIndex(0);
   }, [committedText, selectedMood, useFlats]);
+  useEffect(() => {
+    setShowNegativeHarmony(false);
+  }, [committedText]);
 
   function selectMood(mood) {
     setSelectedMood(mood);
@@ -691,6 +702,18 @@ export default function VoiceLeadingExplorer() {
     const text = names.join(" ");
     setRawText(text);
     setHistory(h => [...h, { text, label: r.name }]);
+    setError(null);
+  }
+
+  function addNegativeHarmony() {
+    const text = negativeNotes
+      .map(midi => midiToName(midi, negativeUsesFlats))
+      .join(" ");
+    setRawText(text);
+    setHistory(historyEntries => [
+      ...historyEntries,
+      { text, label: negativeHarmonyLabel(negativeNotes) },
+    ]);
     setError(null);
   }
 
@@ -810,6 +833,26 @@ export default function VoiceLeadingExplorer() {
         .vl-current-aliases { margin-top: 3px; color: var(--ink-dim); font-size: 12px; }
         .vl-current-notes {
           font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--ink-dim);
+        }
+        .vl-negative-btn {
+          border: 1px solid var(--hair); border-radius: 999px;
+          background: transparent; color: var(--ink-dim);
+          padding: 6px 10px; cursor: pointer;
+          font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+          transition: border-color 0.15s, color 0.15s, background 0.15s;
+        }
+        .vl-negative-btn:hover, .vl-negative-btn.active {
+          border-color: var(--brass); color: var(--ink);
+          background: rgba(201,138,58,0.08);
+        }
+        .vl-negative-shadow {
+          margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hair);
+        }
+        .vl-negative-kicker {
+          margin-bottom: 4px; color: var(--brass);
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 9px; font-weight: 600; letter-spacing: 0.14em;
+          text-transform: uppercase;
         }
         .vl-piano-wrap {
           margin-top: 12px;
@@ -1249,7 +1292,7 @@ export default function VoiceLeadingExplorer() {
                 ))}
               </div>
               <div className="vl-piano-wrap">
-                <PianoKeys midis={notes} />
+                <PianoKeys midis={notes} flats={key.flats} />
               </div>
               <div className="vl-inspect-actions">
                 <div className="vl-play-group">
@@ -1301,6 +1344,14 @@ export default function VoiceLeadingExplorer() {
                   <span className="vl-current-notes">
                     {currentNotes.map(m => midiToName(m, key.flats)).join(" · ")}
                   </span>
+                  <button
+                    type="button"
+                    className={"vl-negative-btn" + (showNegativeHarmony ? " active" : "")}
+                    onClick={() => setShowNegativeHarmony(show => !show)}
+                    aria-expanded={showNegativeHarmony}
+                  >
+                    Show Negative Harmony
+                  </button>
                   <div className="vl-play-group">
                     <button
                       className="vl-play-btn"
@@ -1314,8 +1365,43 @@ export default function VoiceLeadingExplorer() {
                 </div>
               </div>
               <div className="vl-piano-wrap">
-                <PianoKeys midis={currentNotes} />
+                <PianoKeys midis={currentNotes} flats={key.flats} />
               </div>
+              {showNegativeHarmony && (
+                <div className="vl-negative-shadow">
+                  <div className="vl-negative-kicker">Shadow voicing · pivot {midiToName(currentNotes[0], key.flats)}</div>
+                  <div className="vl-current-row">
+                    <div className="vl-current-name">
+                      {negativeHarmonyLabel(negativeNotes)}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span className="vl-current-notes">
+                        {negativeNotes.map(m => midiToName(m, negativeUsesFlats)).join(" · ")}
+                      </span>
+                      <div className="vl-play-group">
+                        <button
+                          className="vl-play-btn"
+                          onClick={() => playChord(negativeNotes, "negative")}
+                          aria-label="Play negative harmony voicing"
+                          type="button"
+                        >
+                          {playingKey === "negative" ? "■" : "▶"}
+                        </button>
+                      </div>
+                      <button
+                        className="vl-row-apply"
+                        type="button"
+                        onClick={addNegativeHarmony}
+                      >
+                        Add it →
+                      </button>
+                    </div>
+                  </div>
+                  <div className="vl-piano-wrap">
+                    <PianoKeys midis={negativeNotes} flats={negativeUsesFlats} />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="vl-mood-picker">
@@ -1395,7 +1481,7 @@ export default function VoiceLeadingExplorer() {
                       </button>
                     </div>
                     <div className="vl-piano-wrap">
-                      <PianoKeys midis={selectedNotes} />
+                      <PianoKeys midis={selectedNotes} flats={key.flats} />
                     </div>
                 </div>
               );
