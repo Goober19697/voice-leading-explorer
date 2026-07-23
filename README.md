@@ -3,7 +3,7 @@
 > **Discover nearby harmonic possibilities through deterministic voice
 > leading.**
 
-![React](https://img.shields.io/badge/React-19-blue)
+![React](https://img.shields.io/badge/React-18.2-blue)
 ![Vite](https://img.shields.io/badge/Vite-Latest-purple)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-yellow)
 ![Tone.js](https://img.shields.io/badge/Tone.js-Audio-green)
@@ -62,6 +62,25 @@ Supports:
 -   Suspended chords
 -   Altered dominants
 -   Modern jazz chord qualities
+-   Rootless extended-chord interpretations
+-   Interval-formula fallback labels for unregistered note sets
+
+## Negative Harmony
+
+-   Reflect any voicing around its first note as the fixed pivot
+-   Show the reflected shadow without replacing the current chord
+-   Analyze inversions from their harmonic root rather than their lowest note
+-   Recognize supported rootless shadows such as `Amaj9 (rootless)`
+-   Spell shadow chord symbols and notes consistently, including conventional
+    flat spellings such as `E♭m` with `E♭ · G♭ · B♭`
+-   Play the shadow independently
+-   Add the shadow directly to the progression trail
+
+## Keyboard Visualization
+
+-   Display current, generated, inspected, and shadow voicings on a piano
+-   Mark the first/reference key with a subtle note-and-octave label
+-   Respect the selected enharmonic spelling on keyboard markers
 
 ## Emotion-Based Discovery
 
@@ -75,6 +94,7 @@ Results are grouped into intuitive musical categories:
 ## Progression Builder
 
 -   Build progressions one discovery at a time
+-   Add generated or negative-harmony voicings
 -   Undo / rewind / remove
 -   Inspect voicings
 -   Re-analyze from any point
@@ -133,6 +153,9 @@ Voice-Leading Solver
 Chord Recognition
       │
       ▼
+Negative Harmony Analysis
+      │
+      ▼
 Emotion Classification
       │
       ▼
@@ -153,6 +176,7 @@ src/
 ├── VoiceLeadingExplorer.jsx
 ├── candidatePool.js
 ├── chordPatterns.js
+├── negativeHarmony.js
 ├── noteParsing.js
 └── main.jsx
 
@@ -173,6 +197,21 @@ standalone/
 5.  Remove duplicate note sets while preserving alternate chord names.
 6.  Put new-root destinations first, then rank each group by total movement.
 7.  Group the final results by emotional character.
+
+## How Negative Harmony Works
+
+1.  Treat the first note of the current voicing as the fixed pivot.
+2.  Reflect every interval above the pivot downward by the same number of
+    semitones.
+3.  Order the reflected notes from their new lowest note upward for display
+    and playback.
+4.  Analyze the complete pitch set to find its harmonic root, including
+    supported interpretations whose root is not played.
+5.  Use conventional enharmonic spelling for the resulting chord and notes,
+    independently of the main Sharps/Flats selector.
+6.  If no registered chord matches, display the intervals measured from the
+    shadow's lowest note instead of an unnamed result.
+7.  Let the user audition the shadow or add it to the progression trail.
 
 ------------------------------------------------------------------------
 
