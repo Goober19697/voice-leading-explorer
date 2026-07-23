@@ -1182,7 +1182,9 @@ export default function HarmonyDiscoveryExplorer() {
           font-family: 'JetBrains Mono', monospace;
         }
         .vl-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
-        @media (max-width: 700px), (hover: none) and (pointer: coarse) {
+        @media (max-width: 700px),
+          (hover: none) and (pointer: coarse),
+          (max-device-width: 700px) {
           .vl-root {
             padding: max(20px, env(safe-area-inset-top))
               max(12px, env(safe-area-inset-right))
