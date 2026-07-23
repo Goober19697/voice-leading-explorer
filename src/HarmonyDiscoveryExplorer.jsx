@@ -753,6 +753,8 @@ export default function HarmonyDiscoveryExplorer() {
           color: var(--ink);
           font-family: 'Inter', sans-serif;
           min-height: 100vh;
+          width: 100%;
+          min-width: 100%;
           padding: 32px 20px 60px;
           box-sizing: border-box;
           overflow-x: hidden;
@@ -989,6 +991,7 @@ export default function HarmonyDiscoveryExplorer() {
         .vl-row-name { width: 148px; flex-shrink: 0; }
         .vl-row-chord {
           font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px;
+          overflow-wrap: anywhere;
         }
         .vl-row-alias {
           font-family: 'JetBrains Mono', monospace;
@@ -1179,7 +1182,7 @@ export default function HarmonyDiscoveryExplorer() {
           font-family: 'JetBrains Mono', monospace;
         }
         .vl-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
-        @media (max-width: 560px) {
+        @media (max-width: 700px), (hover: none) and (pointer: coarse) {
           .vl-root {
             padding: max(20px, env(safe-area-inset-top))
               max(12px, env(safe-area-inset-right))
@@ -1214,7 +1217,11 @@ export default function HarmonyDiscoveryExplorer() {
             padding: 12px;
           }
           .vl-row-name { width: 100%; }
-          .vl-lanes { flex: 1 0 100%; width: 100%; order: 2; }
+          .vl-row-name { order: 1; }
+          .vl-lanes { flex: 1 0 100%; min-width: 0; width: 100%; order: 2; }
+          .vl-row > .vl-play-group,
+          .vl-row > .vl-bass-order,
+          .vl-row > .vl-row-apply { order: 3; }
           .vl-mode-toggle {
             max-width: 100%;
             overflow-x: auto;
