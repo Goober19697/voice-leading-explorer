@@ -62,7 +62,6 @@ Supports:
 -   Suspended chords
 -   Altered dominants
 -   Modern jazz chord qualities
--   Rootless extended-chord interpretations
 -   Interval-formula fallback labels for unregistered note sets
 
 ## Negative Harmony
@@ -70,9 +69,6 @@ Supports:
 -   Reflect any voicing around its first note as the fixed pivot
 -   Show the reflected shadow without replacing the current chord
 -   Analyze inversions from their harmonic root rather than their lowest note
--   Recognize supported rootless shadows such as `Amaj9 (rootless)`
--   Spell shadow chord symbols and notes consistently, including conventional
-    flat spellings such as `E♭m` with `E♭ · G♭ · B♭`
 -   Play the shadow independently
 -   Add the shadow directly to the progression trail
 
