@@ -43,10 +43,10 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t ghcr.io/goober19697/voice-leading-explorer:latest \
-            .
+          -t ghcr.io/goober19697/harmony-discovery-explorer:latest \
+          .
 
       - name: Publish Docker image
         if: github.event_name == 'push'
         run: |
-          docker push ghcr.io/goober19697/voice-leading-explorer:latest
+          docker push ghcr.io/goober19697/harmony-discovery-explorer:latest
